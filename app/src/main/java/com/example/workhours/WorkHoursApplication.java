@@ -2,11 +2,14 @@ package com.example.workhours;
 
 import android.app.ActionMode;
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.Application;
+import android.app.DatePickerDialog;
 import android.app.SearchEvent;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -16,8 +19,20 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
+import android.widget.LinearLayout;
+import android.widget.NumberPicker;
+import android.widget.TextView;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
+import java.time.temporal.WeekFields;
 import java.util.List;
+import java.util.Locale;
 
 public class WorkHoursApplication extends Application {
 
@@ -31,9 +46,13 @@ public class WorkHoursApplication extends Application {
                 installPageSwipe(activity);
             }
 
+            @Override
+            public void onActivityResumed(Activity activity) {
+                installPeriodSelectors(activity);
+            }
+
             @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
             @Override public void onActivityStarted(Activity activity) { }
-            @Override public void onActivityResumed(Activity activity) { }
             @Override public void onActivityPaused(Activity activity) { }
             @Override public void onActivityStopped(Activity activity) { }
             @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) { }
@@ -51,6 +70,153 @@ public class WorkHoursApplication extends Application {
             return insets;
         });
         content.requestApplyInsets();
+    }
+
+    private void installPeriodSelectors(Activity activity) {
+        if (!(activity instanceof MainActivity) && !(activity instanceof WageActivity)) return;
+        try {
+            TextView monthTitle = (TextView) getFieldValue(activity, "monthTitle");
+            TextView weekTitle = (TextView) getFieldValue(activity, "weekTitle");
+
+            if (monthTitle != null && monthTitle.getTag(0x7f0a0001) == null) {
+                monthTitle.setTag(0x7f0a0001, Boolean.TRUE);
+                monthTitle.setClickable(true);
+                monthTitle.setFocusable(true);
+                monthTitle.setOnClickListener(v -> showMonthPicker(activity));
+            }
+
+            if (weekTitle != null && weekTitle.getTag(0x7f0a0002) == null) {
+                weekTitle.setTag(0x7f0a0002, Boolean.TRUE);
+                weekTitle.setClickable(true);
+                weekTitle.setFocusable(true);
+                weekTitle.setOnClickListener(v -> showWeekPicker(activity));
+                weekTitle.addOnLayoutChangeListener((v, left, top, right, bottom,
+                        oldLeft, oldTop, oldRight, oldBottom) -> updateWeekTitle(activity));
+            }
+            updateWeekTitle(activity);
+        } catch (Exception ignored) { }
+    }
+
+    private void showMonthPicker(Activity activity) {
+        try {
+            YearMonth current = (YearMonth) getFieldValue(activity, "displayedMonth");
+            if (current == null) current = YearMonth.now();
+            YearMonth now = YearMonth.now();
+            LocalDate workStart = getWorkStartDate(activity);
+            YearMonth first = workStart == null ? YearMonth.of(now.getYear() - 20, 1) : YearMonth.from(workStart);
+
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER);
+            int pad = dp(activity, 12);
+            row.setPadding(pad, pad, pad, 0);
+
+            NumberPicker yearPicker = new NumberPicker(activity);
+            yearPicker.setMinValue(first.getYear());
+            yearPicker.setMaxValue(now.getYear());
+            yearPicker.setValue(current.getYear());
+            yearPicker.setWrapSelectorWheel(false);
+
+            NumberPicker monthPicker = new NumberPicker(activity);
+            monthPicker.setMinValue(1);
+            monthPicker.setMaxValue(12);
+            monthPicker.setDisplayedValues(new String[]{"1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"});
+            monthPicker.setValue(current.getMonthValue());
+            monthPicker.setWrapSelectorWheel(true);
+
+            row.addView(yearPicker, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+            row.addView(monthPicker, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            new AlertDialog.Builder(activity)
+                    .setTitle("选择月份")
+                    .setView(row)
+                    .setNegativeButton("取消", null)
+                    .setPositiveButton("确定", (dialog, which) -> {
+                        YearMonth selected = YearMonth.of(yearPicker.getValue(), monthPicker.getValue());
+                        if (selected.isAfter(now)) selected = now;
+                        if (selected.isBefore(first)) selected = first;
+                        setFieldValue(activity, "displayedMonth", selected);
+                        invokeNoArg(activity, "refreshMonth");
+                    })
+                    .show();
+        } catch (Exception ignored) { }
+    }
+
+    private void showWeekPicker(Activity activity) {
+        try {
+            LocalDate current = (LocalDate) getFieldValue(activity, "displayedWeekStart");
+            if (current == null) current = LocalDate.now();
+            LocalDate today = LocalDate.now();
+            LocalDate workStart = getWorkStartDate(activity);
+
+            DatePickerDialog dialog = new DatePickerDialog(activity, (view, year, month, day) -> {
+                LocalDate selected = LocalDate.of(year, month + 1, day);
+                if (selected.isAfter(today)) selected = today;
+                if (workStart != null && selected.isBefore(workStart)) selected = workStart;
+                LocalDate monday = selected.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+                setFieldValue(activity, "displayedWeekStart", monday);
+                invokeNoArg(activity, "refreshWeek");
+                updateWeekTitle(activity);
+            }, current.getYear(), current.getMonthValue() - 1, current.getDayOfMonth());
+
+            dialog.setTitle("选择任意一天，查看所在星期");
+            dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
+            if (workStart != null) {
+                dialog.getDatePicker().setMinDate(workStart.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+            }
+            dialog.show();
+        } catch (Exception ignored) { }
+    }
+
+    private void updateWeekTitle(Activity activity) {
+        try {
+            TextView weekTitle = (TextView) getFieldValue(activity, "weekTitle");
+            LocalDate weekStart = (LocalDate) getFieldValue(activity, "displayedWeekStart");
+            if (weekTitle == null || weekStart == null) return;
+            LocalDate weekEnd = weekStart.plusDays(6);
+            WeekFields iso = WeekFields.ISO;
+            int week = weekStart.get(iso.weekOfWeekBasedYear());
+            int weekYear = weekStart.get(iso.weekBasedYear());
+            DateTimeFormatter f = DateTimeFormatter.ofPattern("M月d日", Locale.CHINA);
+            String value = weekYear + "年第" + week + "周（" + weekStart.format(f) + "–" + weekEnd.format(f) + "）";
+            if (!value.contentEquals(weekTitle.getText())) weekTitle.setText(value);
+        } catch (Exception ignored) { }
+    }
+
+    private LocalDate getWorkStartDate(Activity activity) {
+        try {
+            Method method = activity.getClass().getDeclaredMethod("getWorkStartDate");
+            method.setAccessible(true);
+            return (LocalDate) method.invoke(activity);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private Object getFieldValue(Activity activity, String name) throws Exception {
+        Field field = activity.getClass().getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(activity);
+    }
+
+    private void setFieldValue(Activity activity, String name, Object value) {
+        try {
+            Field field = activity.getClass().getDeclaredField(name);
+            field.setAccessible(true);
+            field.set(activity, value);
+        } catch (Exception ignored) { }
+    }
+
+    private void invokeNoArg(Activity activity, String name) {
+        try {
+            Method method = activity.getClass().getDeclaredMethod(name);
+            method.setAccessible(true);
+            method.invoke(activity);
+        } catch (Exception ignored) { }
+    }
+
+    private int dp(Activity activity, int value) {
+        return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }
 
     private void installPageSwipe(Activity activity) {
