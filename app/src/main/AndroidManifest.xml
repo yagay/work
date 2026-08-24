@@ -17,6 +17,11 @@
 
         <activity
             android:name=".MainActivity"
+            android:exported="false"
+            android:label="上班总时间" />
+
+        <activity
+            android:name=".HomeActivity"
             android:exported="true"
             android:label="上班总时间">
             <intent-filter>
