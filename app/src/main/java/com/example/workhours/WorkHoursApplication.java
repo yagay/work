@@ -8,6 +8,8 @@ import android.app.DatePickerDialog;
 import android.app.SearchEvent;
 import android.content.Intent;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -33,8 +35,17 @@ import java.time.temporal.TemporalAdjusters;
 import java.time.temporal.WeekFields;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class WorkHoursApplication extends Application {
+
+    private static final int TAG_MONTH_SELECTOR = 0x7f0a0001;
+    private static final int TAG_WEEK_SELECTOR = 0x7f0a0002;
+    private static final int TAG_SUMMARY_FORMATTER = 0x7f0a0003;
+
+    private static final Pattern WORK_STATS_PATTERN = Pattern.compile(
+            "工作[:：\\s]*([0-9]+)天\\s*·\\s*请假[:：\\s]*([0-9]+)天\\s*·\\s*公共假日[:：\\s]*([0-9]+)天\\s*·\\s*休息[:：\\s]*([0-9]+)天");
 
     @Override
     public void onCreate() {
@@ -49,6 +60,7 @@ public class WorkHoursApplication extends Application {
             @Override
             public void onActivityResumed(Activity activity) {
                 installPeriodSelectors(activity);
+                installSummaryFormatters(activity);
             }
 
             @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
@@ -72,21 +84,91 @@ public class WorkHoursApplication extends Application {
         content.requestApplyInsets();
     }
 
+    private void installSummaryFormatters(Activity activity) {
+        if (activity instanceof MainActivity) {
+            installSummaryFormatter(activity, "weekSummaryText", true);
+            installSummaryFormatter(activity, "rangeSummaryText", true);
+        } else if (activity instanceof WageActivity) {
+            installSummaryFormatter(activity, "weekSummary", false);
+            installSummaryFormatter(activity, "monthSummary", false);
+            installSummaryFormatter(activity, "daySummary", false);
+        }
+    }
+
+    private void installSummaryFormatter(Activity activity, String fieldName, boolean workStats) {
+        try {
+            TextView view = (TextView) getFieldValue(activity, fieldName);
+            if (view == null) return;
+            if (view.getTag(TAG_SUMMARY_FORMATTER) == null) {
+                view.setTag(TAG_SUMMARY_FORMATTER, Boolean.TRUE);
+                final boolean[] formatting = {false};
+                view.addTextChangedListener(new TextWatcher() {
+                    @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+                    @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+                    @Override
+                    public void afterTextChanged(Editable s) {
+                        if (formatting[0]) return;
+                        String oldText = s.toString();
+                        String newText = workStats ? formatWorkStats(oldText) : formatGeneralSummary(oldText);
+                        if (!oldText.equals(newText)) {
+                            formatting[0] = true;
+                            view.setText(newText);
+                            formatting[0] = false;
+                        }
+                    }
+                });
+            }
+            String oldText = view.getText().toString();
+            String newText = workStats ? formatWorkStats(oldText) : formatGeneralSummary(oldText);
+            if (!oldText.equals(newText)) view.setText(newText);
+        } catch (Exception ignored) { }
+    }
+
+    private String formatWorkStats(String text) {
+        Matcher matcher = WORK_STATS_PATTERN.matcher(text);
+        if (!matcher.find()) return text;
+        String replacement = "工作  " + matcher.group(1) + "天        请假  " + matcher.group(2) + "天"
+                + "\n公共假日  " + matcher.group(3) + "天        休息  " + matcher.group(4) + "天";
+        return matcher.replaceFirst(Matcher.quoteReplacement(replacement));
+    }
+
+    private String formatGeneralSummary(String text) {
+        if (text == null || text.isEmpty() || !text.contains(" · ")) return text;
+        String[] lines = text.split("\\n");
+        StringBuilder out = new StringBuilder();
+        for (String line : lines) {
+            if (out.length() > 0) out.append('\n');
+            String[] parts = line.split("\\s*·\\s*");
+            if (parts.length <= 1) {
+                out.append(line);
+            } else if (parts.length == 2) {
+                out.append(parts[0]).append("        ").append(parts[1]);
+            } else {
+                out.append(parts[0]).append("        ").append(parts[1]);
+                for (int i = 2; i < parts.length; i += 2) {
+                    out.append('\n').append(parts[i]);
+                    if (i + 1 < parts.length) out.append("        ").append(parts[i + 1]);
+                }
+            }
+        }
+        return out.toString();
+    }
+
     private void installPeriodSelectors(Activity activity) {
         if (!(activity instanceof MainActivity) && !(activity instanceof WageActivity)) return;
         try {
             TextView monthTitle = (TextView) getFieldValue(activity, "monthTitle");
             TextView weekTitle = (TextView) getFieldValue(activity, "weekTitle");
 
-            if (monthTitle != null && monthTitle.getTag(0x7f0a0001) == null) {
-                monthTitle.setTag(0x7f0a0001, Boolean.TRUE);
+            if (monthTitle != null && monthTitle.getTag(TAG_MONTH_SELECTOR) == null) {
+                monthTitle.setTag(TAG_MONTH_SELECTOR, Boolean.TRUE);
                 monthTitle.setClickable(true);
                 monthTitle.setFocusable(true);
                 monthTitle.setOnClickListener(v -> showMonthPicker(activity));
             }
 
-            if (weekTitle != null && weekTitle.getTag(0x7f0a0002) == null) {
-                weekTitle.setTag(0x7f0a0002, Boolean.TRUE);
+            if (weekTitle != null && weekTitle.getTag(TAG_WEEK_SELECTOR) == null) {
+                weekTitle.setTag(TAG_WEEK_SELECTOR, Boolean.TRUE);
                 weekTitle.setClickable(true);
                 weekTitle.setFocusable(true);
                 weekTitle.setOnClickListener(v -> showWeekPicker(activity));
