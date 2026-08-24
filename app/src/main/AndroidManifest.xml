@@ -17,32 +17,13 @@
 
         <activity
             android:name=".MainActivity"
-            android:exported="false"
-            android:label="上班总时间" />
-
-        <activity-alias
-            android:name=".WorkHoursLauncher"
-            android:enabled="true"
             android:exported="true"
-            android:label="上班总时间"
-            android:targetActivity=".MainActivity">
+            android:label="上班总时间">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity-alias>
-
-        <activity-alias
-            android:name=".WageLauncher"
-            android:enabled="true"
-            android:exported="true"
-            android:label="工资统计"
-            android:targetActivity=".WageActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
+        </activity>
 
     </application>
 </manifest>
