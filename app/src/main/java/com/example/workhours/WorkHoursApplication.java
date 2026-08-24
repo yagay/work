@@ -7,9 +7,15 @@ import android.app.Application;
 import android.app.DatePickerDialog;
 import android.app.SearchEvent;
 import android.content.Intent;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.Editable;
+import android.text.Spannable;
+import android.text.SpannableString;
 import android.text.TextWatcher;
+import android.text.style.BackgroundColorSpan;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
 import android.view.GestureDetector;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -42,10 +48,31 @@ public class WorkHoursApplication extends Application {
 
     private static final int TAG_MONTH_SELECTOR = 0x7f0a0001;
     private static final int TAG_WEEK_SELECTOR = 0x7f0a0002;
-    private static final int TAG_SUMMARY_FORMATTER = 0x7f0a0003;
+    private static final int TAG_COLOR_FORMATTER = 0x7f0a0003;
 
-    private static final Pattern WORK_STATS_PATTERN = Pattern.compile(
-            "工作[:：\\s]*([0-9]+)天\\s*·\\s*请假[:：\\s]*([0-9]+)天\\s*·\\s*公共假日[:：\\s]*([0-9]+)天\\s*·\\s*休息[:：\\s]*([0-9]+)天");
+    private static final int WORK_COLOR = 0xFF137333;
+    private static final int WORK_BG = 0xFFE6F4EA;
+    private static final int LEAVE_COLOR = 0xFF185ABC;
+    private static final int LEAVE_BG = 0xFFE8F0FE;
+    private static final int HOLIDAY_COLOR = 0xFFC26401;
+    private static final int HOLIDAY_BG = 0xFFFEF7E0;
+    private static final int REST_COLOR = 0xFF5F6368;
+    private static final int REST_BG = 0xFFF1F3F4;
+    private static final int OVERTIME_COLOR = 0xFF7B1FA2;
+    private static final int WAGE_COLOR = 0xFF137333;
+    private static final int DEDUCT_COLOR = 0xFFC5221F;
+    private static final int HOURS_COLOR = 0xFF185ABC;
+
+    private static final Pattern[] COLOR_PATTERNS = new Pattern[]{
+            Pattern.compile("工作(?:\\s*[:：]?\\s*\\d+天)?"),
+            Pattern.compile("请假(?:\\s*[:：]?\\s*\\d+天)?"),
+            Pattern.compile("公共假日(?:\\s*[:：]?\\s*\\d+天)?"),
+            Pattern.compile("休息(?:\\s*[:：]?\\s*\\d+天)?"),
+            Pattern.compile("加班(?:\\s*[:：]?\\s*[^\\n·）)]*)?"),
+            Pattern.compile("(?:本周|本月|当天|总)?工资(?:\\s*[:：]?\\s*£?[0-9.,]+)?"),
+            Pattern.compile("(?:已扣|扣工资)(?:\\s*[:：]?\\s*-?£?[0-9.,]+|\\s*[:：]?\\s*\\d+天)?"),
+            Pattern.compile("(?:本周|本月|当天|总)?工时(?:\\s*[:：]?\\s*[^\\n·）)]*)?")
+    };
 
     @Override
     public void onCreate() {
@@ -60,7 +87,7 @@ public class WorkHoursApplication extends Application {
             @Override
             public void onActivityResumed(Activity activity) {
                 installPeriodSelectors(activity);
-                installSummaryFormatters(activity);
+                installColorFormatters(activity);
             }
 
             @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
@@ -84,23 +111,40 @@ public class WorkHoursApplication extends Application {
         content.requestApplyInsets();
     }
 
-    private void installSummaryFormatters(Activity activity) {
+    private void installColorFormatters(Activity activity) {
         if (activity instanceof MainActivity) {
-            installSummaryFormatter(activity, "weekSummaryText", true);
-            installSummaryFormatter(activity, "rangeSummaryText", true);
+            installColorFormatter(activity, "weekSummaryText");
+            installColorFormatter(activity, "rangeSummaryText");
+            installColorFormatter(activity, "totalHoursText");
+            styleFixedStat(activity, "workDaysText", WORK_COLOR, WORK_BG);
+            styleFixedStat(activity, "leaveDaysText", LEAVE_COLOR, LEAVE_BG);
+            styleFixedStat(activity, "holidayDaysText", HOLIDAY_COLOR, HOLIDAY_BG);
+            styleFixedStat(activity, "restDaysText", REST_COLOR, REST_BG);
         } else if (activity instanceof WageActivity) {
-            installSummaryFormatter(activity, "weekSummary", false);
-            installSummaryFormatter(activity, "monthSummary", false);
-            installSummaryFormatter(activity, "daySummary", false);
+            installColorFormatter(activity, "weekSummary");
+            installColorFormatter(activity, "monthSummary");
+            installColorFormatter(activity, "daySummary");
         }
     }
 
-    private void installSummaryFormatter(Activity activity, String fieldName, boolean workStats) {
+    private void styleFixedStat(Activity activity, String fieldName, int textColor, int backgroundColor) {
         try {
             TextView view = (TextView) getFieldValue(activity, fieldName);
             if (view == null) return;
-            if (view.getTag(TAG_SUMMARY_FORMATTER) == null) {
-                view.setTag(TAG_SUMMARY_FORMATTER, Boolean.TRUE);
+            view.setTextColor(textColor);
+            view.setBackgroundColor(backgroundColor);
+            int horizontal = dp(activity, 8);
+            int vertical = dp(activity, 5);
+            view.setPadding(horizontal, vertical, horizontal, vertical);
+        } catch (Exception ignored) { }
+    }
+
+    private void installColorFormatter(Activity activity, String fieldName) {
+        try {
+            TextView view = (TextView) getFieldValue(activity, fieldName);
+            if (view == null) return;
+            if (view.getTag(TAG_COLOR_FORMATTER) == null) {
+                view.setTag(TAG_COLOR_FORMATTER, Boolean.TRUE);
                 final boolean[] formatting = {false};
                 view.addTextChangedListener(new TextWatcher() {
                     @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
@@ -108,50 +152,40 @@ public class WorkHoursApplication extends Application {
                     @Override
                     public void afterTextChanged(Editable s) {
                         if (formatting[0]) return;
-                        String oldText = s.toString();
-                        String newText = workStats ? formatWorkStats(oldText) : formatGeneralSummary(oldText);
-                        if (!oldText.equals(newText)) {
-                            formatting[0] = true;
-                            view.setText(newText);
-                            formatting[0] = false;
-                        }
+                        formatting[0] = true;
+                        view.setText(colorizeSummary(s.toString()));
+                        formatting[0] = false;
                     }
                 });
             }
-            String oldText = view.getText().toString();
-            String newText = workStats ? formatWorkStats(oldText) : formatGeneralSummary(oldText);
-            if (!oldText.equals(newText)) view.setText(newText);
+            view.setText(colorizeSummary(view.getText().toString()));
         } catch (Exception ignored) { }
     }
 
-    private String formatWorkStats(String text) {
-        Matcher matcher = WORK_STATS_PATTERN.matcher(text);
-        if (!matcher.find()) return text;
-        String replacement = "工作  " + matcher.group(1) + "天        请假  " + matcher.group(2) + "天"
-                + "\n公共假日  " + matcher.group(3) + "天        休息  " + matcher.group(4) + "天";
-        return matcher.replaceFirst(Matcher.quoteReplacement(replacement));
+    private SpannableString colorizeSummary(String text) {
+        SpannableString span = new SpannableString(text == null ? "" : text);
+        applyPattern(span, COLOR_PATTERNS[0], WORK_COLOR, WORK_BG);
+        applyPattern(span, COLOR_PATTERNS[1], LEAVE_COLOR, LEAVE_BG);
+        applyPattern(span, COLOR_PATTERNS[2], HOLIDAY_COLOR, HOLIDAY_BG);
+        applyPattern(span, COLOR_PATTERNS[3], REST_COLOR, REST_BG);
+        applyPattern(span, COLOR_PATTERNS[4], OVERTIME_COLOR, 0);
+        applyPattern(span, COLOR_PATTERNS[5], WAGE_COLOR, 0);
+        applyPattern(span, COLOR_PATTERNS[6], DEDUCT_COLOR, 0);
+        applyPattern(span, COLOR_PATTERNS[7], HOURS_COLOR, 0);
+        return span;
     }
 
-    private String formatGeneralSummary(String text) {
-        if (text == null || text.isEmpty() || !text.contains(" · ")) return text;
-        String[] lines = text.split("\\n");
-        StringBuilder out = new StringBuilder();
-        for (String line : lines) {
-            if (out.length() > 0) out.append('\n');
-            String[] parts = line.split("\\s*·\\s*");
-            if (parts.length <= 1) {
-                out.append(line);
-            } else if (parts.length == 2) {
-                out.append(parts[0]).append("        ").append(parts[1]);
-            } else {
-                out.append(parts[0]).append("        ").append(parts[1]);
-                for (int i = 2; i < parts.length; i += 2) {
-                    out.append('\n').append(parts[i]);
-                    if (i + 1 < parts.length) out.append("        ").append(parts[i + 1]);
-                }
+    private void applyPattern(SpannableString span, Pattern pattern, int textColor, int backgroundColor) {
+        Matcher matcher = pattern.matcher(span.toString());
+        while (matcher.find()) {
+            int start = matcher.start();
+            int end = matcher.end();
+            span.setSpan(new ForegroundColorSpan(textColor), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            span.setSpan(new StyleSpan(Typeface.BOLD), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if (backgroundColor != 0) {
+                span.setSpan(new BackgroundColorSpan(backgroundColor), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
         }
-        return out.toString();
     }
 
     private void installPeriodSelectors(Activity activity) {
