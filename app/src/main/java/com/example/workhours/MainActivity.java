@@ -90,7 +90,6 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (calendarGrid == null) return;
-
         LocalDate workStart = getWorkStartDate();
         if (workStart != null) {
             if (rangeStart.isBefore(workStart)) rangeStart = workStart;
@@ -209,7 +208,7 @@ public class MainActivity extends Activity {
         calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
         root.addView(calendarGrid);
 
-        TextView hint = text("点击日期可查看或修改。工作开始日期之前不会计入工时。", 13, false);
+        TextView hint = text("点击日期可查看或修改。周六、周日使用不同底色显示。", 13, false);
         hint.setPadding(0, dp(8), 0, 0);
         root.addView(hint);
     }
@@ -380,16 +379,16 @@ public class MainActivity extends Activity {
                         + " · 公共假日：" + stats.holidayDays + "天"
                         + " · 休息：" + stats.restDays + "天"
                         + " · 自定义：" + stats.overrideDays + "天");
-
         addPeriodDetails(weekDetailsContainer, effectiveStart, effectiveEnd, true);
     }
 
     private void rebuildCalendar(LocalDate today) {
         calendarGrid.removeAllViews();
         String[] headers = {"一", "二", "三", "四", "五", "六", "日"};
-        for (String header : headers) {
-            TextView h = text(header, 13, true);
+        for (int i = 0; i < headers.length; i++) {
+            TextView h = text(headers[i], 13, true);
             h.setGravity(Gravity.CENTER);
+            if (i >= 5) h.setTextColor(0xFF5F6368);
             calendarGrid.addView(h, gridParams());
         }
 
@@ -409,6 +408,7 @@ public class MainActivity extends Activity {
             LocalDate date = displayedMonth.atDay(day);
             boolean future = date.isAfter(today);
             boolean beforeStart = workStart != null && date.isBefore(workStart);
+            boolean weekend = date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY;
             boolean holiday = !beforeStart && isBankHoliday(date);
             boolean leave = !holiday && !beforeStart && isLeave(date);
             boolean rest = !holiday && !leave && !beforeStart && isManualRest(date);
@@ -420,14 +420,17 @@ public class MainActivity extends Activity {
             cell.setOrientation(LinearLayout.VERTICAL);
             cell.setGravity(Gravity.CENTER);
             cell.setPadding(dp(2), dp(6), dp(2), dp(5));
+
             if (date.equals(today)) cell.setBackgroundColor(0xFFE8F0FE);
             else if (leave) cell.setBackgroundColor(0xFFEAF2FF);
             else if (override) cell.setBackgroundColor(0xFFFFF4E5);
             else if (holiday) cell.setBackgroundColor(0xFFFFEBEE);
+            else if (weekend) cell.setBackgroundColor(0xFFF1F3F4);
 
             TextView dayText = text(String.valueOf(day), 14, date.equals(today));
             dayText.setGravity(Gravity.CENTER);
             if (future || beforeStart) dayText.setTextColor(0xFF9AA0A6);
+            else if (weekend && !date.equals(today) && !leave && !override && !holiday) dayText.setTextColor(0xFF5F6368);
             cell.addView(dayText);
 
             String status = "";
@@ -440,6 +443,7 @@ public class MainActivity extends Activity {
             }
             TextView statusText = text(status, 10, leave || holiday || rest || override);
             statusText.setGravity(Gravity.CENTER);
+            if (weekend && !leave && !override && !holiday && !future && !beforeStart) statusText.setTextColor(0xFF5F6368);
             cell.addView(statusText);
 
             if (!future && !beforeStart) {
@@ -570,7 +574,6 @@ public class MainActivity extends Activity {
                         + " · 休息：" + stats.restDays + "天"
                         + " · 自定义：" + stats.overrideDays + "天"
                         + "\n范围共 " + days + " 天");
-
         addPeriodDetails(rangeDetailsContainer, start, end, false);
     }
 
@@ -582,7 +585,6 @@ public class MainActivity extends Activity {
         LocalDate workStart = getWorkStartDate();
         for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
             if (workStart != null && date.isBefore(workStart)) continue;
-
             boolean holiday = isBankHoliday(date);
             boolean leave = !holiday && isLeave(date);
             boolean rest = !holiday && !leave && isManualRest(date);
@@ -814,6 +816,7 @@ public class MainActivity extends Activity {
         if (date.equals(spring)) return "Spring bank holiday";
         LocalDate summer = LocalDate.of(year, Month.AUGUST, 31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         if (date.equals(summer)) return "Summer bank holiday";
+
         LocalDate christmas = LocalDate.of(year, Month.DECEMBER, 25);
         LocalDate boxing = LocalDate.of(year, Month.DECEMBER, 26);
         LocalDate observedChristmas;
