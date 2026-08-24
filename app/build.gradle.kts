@@ -4,13 +4,13 @@ plugins {
 
 android {
     namespace = "com.example.workhours"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.example.workhours"
-        minSdk = 26
-        targetSdk = 35
-        versionCode = 3
-        versionName = "1.2"
+        minSdk = 31
+        targetSdk = 37
+        versionCode = 7
+        versionName = "1.7"
     }
 }
