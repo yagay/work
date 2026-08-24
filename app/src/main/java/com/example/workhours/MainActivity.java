@@ -2,6 +2,7 @@ package com.example.workhours;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
@@ -52,19 +53,34 @@ public class MainActivity extends Activity {
     private GridLayout calendarGrid;
     private LinearLayout exceptionsContainer;
 
+    private LocalDate rangeStart;
+    private LocalDate rangeEnd;
+    private Button rangeStartButton;
+    private Button rangeEndButton;
+    private TextView rangeSummaryText;
+    private LinearLayout rangeDetailsContainer;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         displayedMonth = YearMonth.now();
+        LocalDate today = LocalDate.now();
+        rangeStart = today.withDayOfMonth(1);
+        rangeEnd = today;
         setContentView(buildUi());
         refreshMonth();
+        updateRangeButtons();
+        calculateRange();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (calendarGrid != null) refreshMonth();
+        if (calendarGrid != null) {
+            refreshMonth();
+            calculateRange();
+        }
     }
 
     private View buildUi() {
@@ -162,6 +178,51 @@ public class MainActivity extends Activity {
         hint.setPadding(0, dp(8), 0, 0);
         root.addView(hint);
 
+        TextView rangeTitle = text("日期范围统计", 19, true);
+        rangeTitle.setPadding(0, dp(24), 0, dp(8));
+        root.addView(rangeTitle);
+
+        LinearLayout rangeRow = new LinearLayout(this);
+        rangeRow.setOrientation(LinearLayout.HORIZONTAL);
+        rangeRow.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(rangeRow);
+
+        rangeStartButton = new Button(this);
+        rangeStartButton.setOnClickListener(v -> showDatePicker(true));
+        rangeRow.addView(rangeStartButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
+
+        TextView to = text(" 至 ", 14, false);
+        to.setGravity(Gravity.CENTER);
+        rangeRow.addView(to, new LinearLayout.LayoutParams(dp(38), dp(50)));
+
+        rangeEndButton = new Button(this);
+        rangeEndButton.setOnClickListener(v -> showDatePicker(false));
+        rangeRow.addView(rangeEndButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
+
+        Button rangeCalculate = new Button(this);
+        rangeCalculate.setText("统计这段时间");
+        LinearLayout.LayoutParams rangeButtonParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(50));
+        rangeButtonParams.topMargin = dp(8);
+        root.addView(rangeCalculate, rangeButtonParams);
+        rangeCalculate.setOnClickListener(v -> calculateRange());
+
+        LinearLayout rangeCard = new LinearLayout(this);
+        rangeCard.setOrientation(LinearLayout.VERTICAL);
+        rangeCard.setPadding(dp(14), dp(12), dp(14), dp(12));
+        rangeCard.setBackgroundColor(0xFFF8F9FA);
+        LinearLayout.LayoutParams rangeCardParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        rangeCardParams.topMargin = dp(8);
+        root.addView(rangeCard, rangeCardParams);
+
+        rangeSummaryText = text("", 16, true);
+        rangeCard.addView(rangeSummaryText);
+        rangeDetailsContainer = new LinearLayout(this);
+        rangeDetailsContainer.setOrientation(LinearLayout.VERTICAL);
+        rangeCard.addView(rangeDetailsContainer);
+
         TextView exceptionTitle = text("本月异常记录", 19, true);
         exceptionTitle.setPadding(0, dp(24), 0, dp(8));
         root.addView(exceptionTitle);
@@ -176,6 +237,103 @@ public class MainActivity extends Activity {
         TextView view = text("", 14, true);
         view.setGravity(Gravity.CENTER);
         return view;
+    }
+
+    private void showDatePicker(boolean start) {
+        LocalDate initial = start ? rangeStart : rangeEnd;
+        LocalDate today = LocalDate.now();
+        DatePickerDialog dialog = new DatePickerDialog(this,
+                (view, year, month, dayOfMonth) -> {
+                    LocalDate selected = LocalDate.of(year, month + 1, dayOfMonth);
+                    if (selected.isAfter(today)) selected = today;
+                    if (start) rangeStart = selected;
+                    else rangeEnd = selected;
+                    updateRangeButtons();
+                }, initial.getYear(), initial.getMonthValue() - 1, initial.getDayOfMonth());
+        dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
+        dialog.show();
+    }
+
+    private void updateRangeButtons() {
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        rangeStartButton.setText(rangeStart.format(fmt));
+        rangeEndButton.setText(rangeEnd.format(fmt));
+    }
+
+    private void calculateRange() {
+        rangeDetailsContainer.removeAllViews();
+        LocalDate today = LocalDate.now();
+        LocalDate start = rangeStart;
+        LocalDate end = rangeEnd.isAfter(today) ? today : rangeEnd;
+
+        if (start.isAfter(end)) {
+            rangeSummaryText.setText("开始日期不能晚于结束日期");
+            rangeDetailsContainer.addView(text("请重新选择日期范围。", 13, false));
+            return;
+        }
+
+        float dailyHours = getConfiguredDailyHours();
+        float total = 0f;
+        int workDays = 0;
+        int leaveDays = 0;
+        int holidayDays = 0;
+        int restDays = 0;
+        int overrideDays = 0;
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy年M月d日 E", Locale.CHINA);
+        LinearLayout details = rangeDetailsContainer;
+
+        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
+            boolean holiday = isBankHoliday(date);
+            boolean leave = !holiday && isLeave(date);
+            boolean rest = !holiday && !leave && isManualRest(date);
+            boolean configuredWorkDay = isConfiguredWorkDay(date) && !holiday;
+            boolean override = !holiday && !leave && !rest && hasOverride(date);
+            float hours = getHoursForDate(date, dailyHours, configuredWorkDay);
+
+            total += hours;
+            if (hours > 0f) workDays++;
+            if (leave) leaveDays++;
+            if (holiday) holidayDays++;
+            if (rest) restDays++;
+            if (override) overrideDays++;
+
+            String line = null;
+            if (holiday) {
+                line = date.format(fmt) + " · 公共假期 · " + getBankHolidayName(date) + " · 0 小时";
+            } else if (leave) {
+                String note = getLeaveNote(date);
+                line = date.format(fmt) + " · 请假" + (note.isEmpty() ? "" : " · " + note) + " · 0 小时";
+            } else if (rest) {
+                line = date.format(fmt) + " · 休息 · 0 小时";
+            } else if (override) {
+                line = date.format(fmt) + " · 自定义工时 · " + formatDurationHours(hours);
+            }
+
+            if (line != null) {
+                TextView row = text(line, 13, true);
+                row.setPadding(0, dp(5), 0, dp(5));
+                details.addView(row);
+            }
+        }
+
+        long days = Duration.between(start.atStartOfDay(), end.plusDays(1).atStartOfDay()).toDays();
+        rangeSummaryText.setText(
+                start.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + " 至 "
+                        + end.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"))
+                        + "\n总工时：" + formatDurationHours(total)
+                        + "\n工作：" + workDays + "天"
+                        + " · 请假：" + leaveDays + "天"
+                        + " · 假期：" + holidayDays + "天"
+                        + " · 休息：" + restDays + "天"
+                        + " · 自定义：" + overrideDays + "天"
+                        + "\n范围共 " + days + " 天");
+
+        if (details.getChildCount() == 0) {
+            TextView none = text("这段时间没有公共假期、请假、手动休息或自定义工时记录。", 13, false);
+            none.setPadding(0, dp(8), 0, 0);
+            details.addView(none);
+        }
     }
 
     private void refreshMonth() {
@@ -455,6 +613,7 @@ public class MainActivity extends Activity {
                             editor.apply();
                             dialog.dismiss();
                             refreshMonth();
+                            calculateRange();
                             Toast.makeText(this, "修改已保存", Toast.LENGTH_SHORT).show();
                         }).show();
             });
@@ -469,6 +628,7 @@ public class MainActivity extends Activity {
                                         .remove(leaveNoteKey(date)).remove(restKey(date)).apply();
                                 dialog.dismiss();
                                 refreshMonth();
+                                calculateRange();
                                 Toast.makeText(this, "已恢复自动计算", Toast.LENGTH_SHORT).show();
                             }).show());
         });
