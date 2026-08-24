@@ -28,7 +28,6 @@ import java.time.LocalTime;
 import java.time.Month;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
 import java.util.HashSet;
 import java.util.Locale;
@@ -56,7 +55,7 @@ public class MainActivity extends Activity {
     private YearMonth displayedMonth;
     private LocalDate displayedWeekStart;
     private LocalDate rangeStart, rangeEnd;
-    private TextView monthTitle, totalHoursText, workDaysText, leaveDaysText, holidayDaysText;
+    private TextView monthTitle, totalHoursText, workDaysText, leaveDaysText, holidayDaysText, restDaysText;
     private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
     private GridLayout calendarGrid;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
@@ -140,11 +139,24 @@ public class MainActivity extends Activity {
         LinearLayout card = card(); root.addView(card);
         card.addView(text("本月总工时（含加班）", 13, false));
         totalHoursText = text("", 32, true); totalHoursText.setPadding(0, dp(3), 0, dp(10)); card.addView(totalHoursText);
-        LinearLayout stats = horizontal(); card.addView(stats);
-        workDaysText = statText(); leaveDaysText = statText(); holidayDaysText = statText();
-        stats.addView(workDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        stats.addView(leaveDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        stats.addView(holidayDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        LinearLayout statsRows = vertical();
+        card.addView(statsRows);
+        LinearLayout statsRow1 = horizontal();
+        LinearLayout statsRow2 = horizontal();
+        statsRows.addView(statsRow1);
+        LinearLayout.LayoutParams row2Params = new LinearLayout.LayoutParams(-1, -2);
+        row2Params.topMargin = dp(8);
+        statsRows.addView(statsRow2, row2Params);
+
+        workDaysText = statLineText();
+        leaveDaysText = statLineText();
+        holidayDaysText = statLineText();
+        restDaysText = statLineText();
+        statsRow1.addView(workDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
+        statsRow1.addView(leaveDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
+        statsRow2.addView(holidayDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
+        statsRow2.addView(restDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
 
         TextView ct = text("月历", 19, true); ct.setPadding(0, dp(22), 0, dp(8)); root.addView(ct);
         calendarGrid = new GridLayout(this); calendarGrid.setColumnCount(7); calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS); root.addView(calendarGrid);
@@ -184,7 +196,10 @@ public class MainActivity extends Activity {
         previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first)); nextMonthButton.setEnabled(displayedMonth.isBefore(now));
         LocalDate start = displayedMonth.atDay(1); if (ws != null && start.isBefore(ws)) start = ws; LocalDate end = displayedMonth.equals(now) ? today : displayedMonth.atEndOfMonth();
         Stats s = collectStats(start, end); totalHoursText.setText(formatDurationHours(s.totalHours));
-        workDaysText.setText("工作\n" + s.workDays + "天"); leaveDaysText.setText("请假\n" + s.leaveDays + "天"); holidayDaysText.setText("公共假日\n" + s.holidayDays + "天");
+        workDaysText.setText("工作  " + s.workDays + "天");
+        leaveDaysText.setText("请假  " + s.leaveDays + "天");
+        holidayDaysText.setText("公共假日  " + s.holidayDays + "天");
+        restDaysText.setText("休息  " + s.restDays + "天");
         rebuildCalendar(today); rebuildExceptions(end);
     }
 
@@ -295,6 +310,7 @@ public class MainActivity extends Activity {
     private LocalDate observedDate(LocalDate d){if(d.getDayOfWeek()==DayOfWeek.SATURDAY)return d.plusDays(2);if(d.getDayOfWeek()==DayOfWeek.SUNDAY)return d.plusDays(1);return d;}
     private LocalDate easterSunday(int y){int a=y%19,b=y/100,c=y%100,d=b/4,e=b%4,f=(b+8)/25,g=(b-f+1)/3,h=(19*a+b-d-g+15)%30,i=c/4,k=c%4,l=(32+2*e+2*i-h-k)%7,m=(a+11*h+22*l)/451,mo=(h+l-7*m+114)/31,da=((h+l-7*m+114)%31)+1;return LocalDate.of(y,mo,da);}
     private String formatDurationHours(float h){int m=Math.round(h*60),hh=m/60,mm=m%60;if(mm==0)return hh+" 小时";if(hh==0)return mm+" 分钟";return hh+" 小时 "+mm+" 分钟";} private String shortHours(float h){int m=Math.round(h*60);return m%60==0?(m/60)+"h":String.format(Locale.US,"%.1fh",h);}
-    private TextView statText(){TextView v=text("",14,true);v.setGravity(Gravity.CENTER);return v;} private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;} private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;} private LinearLayout card(){LinearLayout l=vertical();l.setPadding(dp(14),dp(12),dp(14),dp(12));l.setBackgroundColor(0xFFF8F9FA);return l;} private Button button(String s){Button b=new Button(this);b.setText(s);return b;} private TextView text(String s,int sp,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(sp);v.setTextColor(0xFF202124);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
+    private TextView statLineText(){TextView v=text("",15,true);v.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);v.setSingleLine(true);v.setPadding(dp(4),dp(2),dp(4),dp(2));return v;}
+    private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;} private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;} private LinearLayout card(){LinearLayout l=vertical();l.setPadding(dp(14),dp(12),dp(14),dp(12));l.setBackgroundColor(0xFFF8F9FA);return l;} private Button button(String s){Button b=new Button(this);b.setText(s);return b;} private TextView text(String s,int sp,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(sp);v.setTextColor(0xFF202124);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
     private GridLayout.LayoutParams gridParams(){GridLayout.LayoutParams p=new GridLayout.LayoutParams();p.width=0;p.height=dp(58);p.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);p.setMargins(dp(1),dp(1),dp(1),dp(1));return p;} private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }
