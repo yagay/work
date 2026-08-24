@@ -183,8 +183,7 @@ public class WorkHoursApplication extends Application {
 
     /**
      * When all four counters occur in the same TextView they always become:
-     * 工作 x天        请假 x天
-     * 公共假日 x天    休息 x天
+     * 工作 x天 ｜ 请假 x天 ｜ 公共假日 x天 ｜ 休息 x天
      */
     private String normalizeFourStatusStats(String text) {
         Matcher work = WORK_COUNT_PATTERN.matcher(text);
@@ -198,8 +197,8 @@ public class WorkHoursApplication extends Application {
         int end = Math.max(Math.max(work.end(), leave.end()),
                 Math.max(holiday.end(), rest.end()));
 
-        String replacement = "工作  " + work.group(1) + "天        请假  " + leave.group(1) + "天"
-                + "\n公共假日  " + holiday.group(1) + "天        休息  " + rest.group(1) + "天";
+        String replacement = "工作 " + work.group(1) + "天 ｜ 请假 " + leave.group(1) + "天"
+                + " ｜ 公共假日 " + holiday.group(1) + "天 ｜ 休息 " + rest.group(1) + "天";
         return text.substring(0, start) + replacement + text.substring(end);
     }
 
