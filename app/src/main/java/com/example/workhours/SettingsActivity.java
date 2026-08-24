@@ -1,6 +1,7 @@
 package com.example.workhours;
 
 import android.app.Activity;
+import android.app.DatePickerDialog;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -15,6 +16,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -26,12 +28,15 @@ public class SettingsActivity extends Activity {
     private static final String START_TIME_KEY = "start_time";
     private static final String END_TIME_KEY = "end_time";
     private static final String BREAK_MINUTES_KEY = "break_minutes";
+    private static final String WORK_START_DATE_KEY = "work_start_date";
 
     private SharedPreferences prefs;
     private EditText startInput;
     private EditText endInput;
     private EditText breakInput;
     private TextView previewText;
+    private Button workStartDateButton;
+    private LocalDate workStartDate;
     private final CheckBox[] dayChecks = new CheckBox[7];
 
     @Override
@@ -67,6 +72,34 @@ public class SettingsActivity extends Activity {
         TextView info = text("设置一次后，普通工作日会自动按这些时间计算工时。", 14, false);
         info.setPadding(0, dp(18), 0, dp(18));
         root.addView(info);
+
+        TextView startDateTitle = text("工作开始日期（可选）", 17, true);
+        root.addView(startDateTitle);
+        TextView startDateInfo = text("设置后，开始日期之前的月份、日期和范围统计都不会计入工时。", 13, false);
+        startDateInfo.setPadding(0, dp(4), 0, dp(8));
+        root.addView(startDateInfo);
+
+        LinearLayout dateRow = new LinearLayout(this);
+        dateRow.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(dateRow);
+
+        workStartDateButton = new Button(this);
+        workStartDateButton.setOnClickListener(v -> chooseWorkStartDate());
+        dateRow.addView(workStartDateButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
+
+        Button clearDate = new Button(this);
+        clearDate.setText("清除");
+        clearDate.setOnClickListener(v -> {
+            workStartDate = null;
+            updateWorkStartDateButton();
+        });
+        LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(dp(86), dp(50));
+        clearParams.leftMargin = dp(8);
+        dateRow.addView(clearDate, clearParams);
+
+        TextView timeTitle = text("每天工作时间", 17, true);
+        timeTitle.setPadding(0, dp(24), 0, dp(8));
+        root.addView(timeTitle);
 
         root.addView(text("上班时间（HH:mm）", 15, true));
         startInput = input("09:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
@@ -132,10 +165,33 @@ public class SettingsActivity extends Activity {
         startInput.setText(prefs.getString(START_TIME_KEY, "09:00"));
         endInput.setText(prefs.getString(END_TIME_KEY, "17:30"));
         breakInput.setText(String.valueOf(prefs.getInt(BREAK_MINUTES_KEY, 30)));
+        String savedStartDate = prefs.getString(WORK_START_DATE_KEY, "");
+        if (!savedStartDate.isEmpty()) {
+            try { workStartDate = LocalDate.parse(savedStartDate); }
+            catch (DateTimeParseException ignored) { workStartDate = null; }
+        }
+        updateWorkStartDateButton();
         for (int i = 0; i < 7; i++) {
             dayChecks[i].setChecked(prefs.getBoolean("day_" + i, i < 5));
         }
         updatePreview(false);
+    }
+
+    private void chooseWorkStartDate() {
+        LocalDate initial = workStartDate != null ? workStartDate : LocalDate.now();
+        DatePickerDialog dialog = new DatePickerDialog(this,
+                (view, year, month, dayOfMonth) -> {
+                    workStartDate = LocalDate.of(year, month + 1, dayOfMonth);
+                    updateWorkStartDateButton();
+                }, initial.getYear(), initial.getMonthValue() - 1, initial.getDayOfMonth());
+        dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
+        dialog.show();
+    }
+
+    private void updateWorkStartDateButton() {
+        workStartDateButton.setText(workStartDate == null
+                ? "未设置（统计全部历史）"
+                : workStartDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
     }
 
     private void save() {
@@ -151,6 +207,9 @@ public class SettingsActivity extends Activity {
                 .putString(END_TIME_KEY, end)
                 .putInt(BREAK_MINUTES_KEY, breakMinutes)
                 .putFloat("daily_hours", dailyHours);
+
+        if (workStartDate == null) editor.remove(WORK_START_DATE_KEY);
+        else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());
 
         for (int i = 0; i < 7; i++) {
             editor.putBoolean("day_" + i, dayChecks[i].isChecked());
