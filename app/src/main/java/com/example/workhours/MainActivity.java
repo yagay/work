@@ -11,6 +11,7 @@ import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
@@ -40,6 +41,8 @@ public class MainActivity extends Activity {
     private static final String DAY_START_PREFIX = "day_start_";
     private static final String DAY_END_PREFIX = "day_end_";
     private static final String DAY_BREAK_PREFIX = "day_break_";
+    private static final String OVERTIME_START_PREFIX = "overtime_start_";
+    private static final String OVERTIME_END_PREFIX = "overtime_end_";
     private static final String LEAVE_PREFIX = "leave_";
     private static final String LEAVE_NOTE_PREFIX = "leave_note_";
     private static final String REST_PREFIX = "rest_";
@@ -52,30 +55,24 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private YearMonth displayedMonth;
     private LocalDate displayedWeekStart;
-    private LocalDate rangeStart;
-    private LocalDate rangeEnd;
-
+    private LocalDate rangeStart, rangeEnd;
     private TextView monthTitle, totalHoursText, workDaysText, leaveDaysText, holidayDaysText;
-    private Button previousMonthButton, nextMonthButton;
+    private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
     private GridLayout calendarGrid;
-    private LinearLayout exceptionsContainer;
-    private TextView weekTitle, weekSummaryText;
-    private LinearLayout weekDetailsContainer;
-    private Button previousWeekButton, nextWeekButton;
+    private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
+    private TextView weekTitle, weekSummaryText, rangeSummaryText;
     private Button rangeStartButton, rangeEndButton;
-    private TextView rangeSummaryText;
-    private LinearLayout rangeDetailsContainer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         LocalDate today = LocalDate.now();
-        LocalDate workStart = getWorkStartDate();
         displayedMonth = YearMonth.now();
         displayedWeekStart = mondayOf(today);
         rangeStart = today.withDayOfMonth(1);
-        if (workStart != null && rangeStart.isBefore(workStart)) rangeStart = workStart;
+        LocalDate ws = getWorkStartDate();
+        if (ws != null && rangeStart.isBefore(ws)) rangeStart = ws;
         rangeEnd = today;
         setContentView(buildUi());
         refreshAll();
@@ -85,21 +82,13 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (calendarGrid == null) return;
-        LocalDate workStart = getWorkStartDate();
-        if (workStart != null) {
-            if (rangeStart.isBefore(workStart)) rangeStart = workStart;
-            if (displayedMonth.isBefore(YearMonth.from(workStart))) displayedMonth = YearMonth.from(workStart);
-            LocalDate firstWeek = mondayOf(workStart);
-            if (displayedWeekStart.isBefore(firstWeek)) displayedWeekStart = firstWeek;
+        LocalDate ws = getWorkStartDate();
+        if (ws != null) {
+            if (rangeStart.isBefore(ws)) rangeStart = ws;
+            if (displayedMonth.isBefore(YearMonth.from(ws))) displayedMonth = YearMonth.from(ws);
+            if (displayedWeekStart.isBefore(mondayOf(ws))) displayedWeekStart = mondayOf(ws);
         }
         refreshAll();
-    }
-
-    private void refreshAll() {
-        updateRangeButtons();
-        refreshMonth();
-        refreshWeek();
-        calculateRange();
     }
 
     private ScrollView buildUi() {
@@ -120,9 +109,9 @@ public class MainActivity extends Activity {
         buildWeekSection(root);
         buildRangeSection(root);
 
-        TextView exceptionTitle = text("本月异常记录", 19, true);
-        exceptionTitle.setPadding(0, dp(24), 0, dp(8));
-        root.addView(exceptionTitle);
+        TextView ex = text("本月异常记录", 19, true);
+        ex.setPadding(0, dp(24), 0, dp(8));
+        root.addView(ex);
         exceptionsContainer = vertical();
         root.addView(exceptionsContainer);
         return scroll;
@@ -134,824 +123,178 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, dp(54));
         np.topMargin = dp(14);
         root.addView(nav, np);
-
         previousMonthButton = button("‹");
         previousMonthButton.setTextSize(24);
         previousMonthButton.setOnClickListener(v -> {
             YearMonth target = displayedMonth.minusMonths(1);
-            LocalDate start = getWorkStartDate();
-            if (start == null || !target.isBefore(YearMonth.from(start))) {
-                displayedMonth = target;
-                refreshMonth();
-            }
+            LocalDate ws = getWorkStartDate();
+            if (ws == null || !target.isBefore(YearMonth.from(ws))) { displayedMonth = target; refreshMonth(); }
         });
         nav.addView(previousMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-
-        monthTitle = text("", 20, true);
-        monthTitle.setGravity(Gravity.CENTER);
+        monthTitle = text("", 20, true); monthTitle.setGravity(Gravity.CENTER);
         nav.addView(monthTitle, new LinearLayout.LayoutParams(0, -2, 1f));
-
-        nextMonthButton = button("›");
-        nextMonthButton.setTextSize(24);
-        nextMonthButton.setOnClickListener(v -> {
-            if (displayedMonth.isBefore(YearMonth.now())) {
-                displayedMonth = displayedMonth.plusMonths(1);
-                refreshMonth();
-            }
-        });
+        nextMonthButton = button("›"); nextMonthButton.setTextSize(24);
+        nextMonthButton.setOnClickListener(v -> { if (displayedMonth.isBefore(YearMonth.now())) { displayedMonth = displayedMonth.plusMonths(1); refreshMonth(); }});
         nav.addView(nextMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
 
-        LinearLayout card = vertical();
-        card.setPadding(dp(16), dp(14), dp(16), dp(14));
-        card.setBackgroundColor(0xFFF4F5F7);
-        root.addView(card);
-        card.addView(text("本月总工时", 13, false));
-        totalHoursText = text("", 32, true);
-        totalHoursText.setPadding(0, dp(3), 0, dp(10));
-        card.addView(totalHoursText);
-
-        LinearLayout stats = horizontal();
-        card.addView(stats);
-        workDaysText = statText();
-        leaveDaysText = statText();
-        holidayDaysText = statText();
+        LinearLayout card = card(); root.addView(card);
+        card.addView(text("本月总工时（含加班）", 13, false));
+        totalHoursText = text("", 32, true); totalHoursText.setPadding(0, dp(3), 0, dp(10)); card.addView(totalHoursText);
+        LinearLayout stats = horizontal(); card.addView(stats);
+        workDaysText = statText(); leaveDaysText = statText(); holidayDaysText = statText();
         stats.addView(workDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
         stats.addView(leaveDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
         stats.addView(holidayDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        TextView calendarTitle = text("月历", 19, true);
-        calendarTitle.setPadding(0, dp(22), 0, dp(8));
-        root.addView(calendarTitle);
-        calendarGrid = new GridLayout(this);
-        calendarGrid.setColumnCount(7);
-        calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
-        root.addView(calendarGrid);
-        TextView hint = text("自动休息日显示“休息”；点击日期可按上下班时间修改当天工时。", 13, false);
-        hint.setPadding(0, dp(8), 0, 0);
-        root.addView(hint);
+        TextView ct = text("月历", 19, true); ct.setPadding(0, dp(22), 0, dp(8)); root.addView(ct);
+        calendarGrid = new GridLayout(this); calendarGrid.setColumnCount(7); calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS); root.addView(calendarGrid);
+        TextView hint = text("点击日期可修改上下班时间、请假/休息，并可设置加班开始和结束时间。", 13, false);
+        hint.setPadding(0, dp(8), 0, 0); root.addView(hint);
     }
 
     private void buildWeekSection(LinearLayout root) {
-        TextView title = text("按星期查看", 19, true);
-        title.setPadding(0, dp(24), 0, dp(8));
-        root.addView(title);
-        LinearLayout nav = horizontal();
-        nav.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(nav);
-
-        previousWeekButton = button("‹");
-        previousWeekButton.setTextSize(24);
-        previousWeekButton.setOnClickListener(v -> {
-            LocalDate target = displayedWeekStart.minusWeeks(1);
-            LocalDate start = getWorkStartDate();
-            LocalDate first = start == null ? null : mondayOf(start);
-            if (first == null || !target.isBefore(first)) {
-                displayedWeekStart = target;
-                refreshWeek();
-            }
-        });
+        TextView t = text("按星期查看", 19, true); t.setPadding(0, dp(24), 0, dp(8)); root.addView(t);
+        LinearLayout nav = horizontal(); nav.setGravity(Gravity.CENTER_VERTICAL); root.addView(nav);
+        previousWeekButton = button("‹"); previousWeekButton.setTextSize(24);
+        previousWeekButton.setOnClickListener(v -> { LocalDate target = displayedWeekStart.minusWeeks(1); LocalDate ws = getWorkStartDate(); if (ws == null || !target.isBefore(mondayOf(ws))) { displayedWeekStart = target; refreshWeek(); }});
         nav.addView(previousWeekButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-        weekTitle = text("", 17, true);
-        weekTitle.setGravity(Gravity.CENTER);
-        nav.addView(weekTitle, new LinearLayout.LayoutParams(0, -2, 1f));
-        nextWeekButton = button("›");
-        nextWeekButton.setTextSize(24);
-        nextWeekButton.setOnClickListener(v -> {
-            LocalDate current = mondayOf(LocalDate.now());
-            if (displayedWeekStart.isBefore(current)) {
-                displayedWeekStart = displayedWeekStart.plusWeeks(1);
-                refreshWeek();
-            }
-        });
+        weekTitle = text("", 17, true); weekTitle.setGravity(Gravity.CENTER); nav.addView(weekTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        nextWeekButton = button("›"); nextWeekButton.setTextSize(24);
+        nextWeekButton.setOnClickListener(v -> { LocalDate cur = mondayOf(LocalDate.now()); if (displayedWeekStart.isBefore(cur)) { displayedWeekStart = displayedWeekStart.plusWeeks(1); refreshWeek(); }});
         nav.addView(nextWeekButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-
-        LinearLayout card = vertical();
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        card.setBackgroundColor(0xFFF8F9FA);
-        root.addView(card);
-        weekSummaryText = text("", 16, true);
-        card.addView(weekSummaryText);
-        weekDetailsContainer = vertical();
-        card.addView(weekDetailsContainer);
+        LinearLayout c = card(); root.addView(c); weekSummaryText = text("", 16, true); c.addView(weekSummaryText); weekDetailsContainer = vertical(); c.addView(weekDetailsContainer);
     }
 
     private void buildRangeSection(LinearLayout root) {
-        TextView title = text("日期范围统计", 19, true);
-        title.setPadding(0, dp(24), 0, dp(8));
-        root.addView(title);
-        LinearLayout row = horizontal();
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(row);
-        rangeStartButton = button("");
-        rangeStartButton.setOnClickListener(v -> showDatePicker(true));
-        row.addView(rangeStartButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
-        TextView to = text(" 至 ", 14, false);
-        to.setGravity(Gravity.CENTER);
-        row.addView(to, new LinearLayout.LayoutParams(dp(38), dp(50)));
-        rangeEndButton = button("");
-        rangeEndButton.setOnClickListener(v -> showDatePicker(false));
-        row.addView(rangeEndButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
-        Button calc = button("统计这段时间");
-        calc.setOnClickListener(v -> calculateRange());
-        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, dp(50));
-        cp.topMargin = dp(8);
-        root.addView(calc, cp);
-        LinearLayout card = vertical();
-        card.setPadding(dp(14), dp(12), dp(14), dp(12));
-        card.setBackgroundColor(0xFFF8F9FA);
-        LinearLayout.LayoutParams cardp = new LinearLayout.LayoutParams(-1, -2);
-        cardp.topMargin = dp(8);
-        root.addView(card, cardp);
-        rangeSummaryText = text("", 16, true);
-        card.addView(rangeSummaryText);
-        rangeDetailsContainer = vertical();
-        card.addView(rangeDetailsContainer);
+        TextView t = text("日期范围统计", 19, true); t.setPadding(0, dp(24), 0, dp(8)); root.addView(t);
+        LinearLayout row = horizontal(); row.setGravity(Gravity.CENTER_VERTICAL); root.addView(row);
+        rangeStartButton = button(""); rangeStartButton.setOnClickListener(v -> showDatePicker(true)); row.addView(rangeStartButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
+        TextView to = text(" 至 ", 14, false); to.setGravity(Gravity.CENTER); row.addView(to, new LinearLayout.LayoutParams(dp(38), dp(50)));
+        rangeEndButton = button(""); rangeEndButton.setOnClickListener(v -> showDatePicker(false)); row.addView(rangeEndButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
+        Button calc = button("统计这段时间"); calc.setOnClickListener(v -> calculateRange()); LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, dp(50)); cp.topMargin = dp(8); root.addView(calc, cp);
+        LinearLayout c = card(); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(8); root.addView(c, p); rangeSummaryText = text("", 16, true); c.addView(rangeSummaryText); rangeDetailsContainer = vertical(); c.addView(rangeDetailsContainer);
     }
 
-    private void refreshMonth() {
-        LocalDate today = LocalDate.now();
-        YearMonth current = YearMonth.from(today);
-        LocalDate workStart = getWorkStartDate();
-        YearMonth firstAllowed = workStart == null ? null : YearMonth.from(workStart);
-        if (displayedMonth.isAfter(current)) displayedMonth = current;
-        if (firstAllowed != null && displayedMonth.isBefore(firstAllowed)) displayedMonth = firstAllowed;
-        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月");
-        nextMonthButton.setEnabled(displayedMonth.isBefore(current));
-        previousMonthButton.setEnabled(firstAllowed == null || displayedMonth.isAfter(firstAllowed));
+    private void refreshAll() { updateRangeButtons(); refreshMonth(); refreshWeek(); calculateRange(); }
 
-        LocalDate start = displayedMonth.atDay(1);
-        if (workStart != null && start.isBefore(workStart)) start = workStart;
-        LocalDate end = displayedMonth.equals(current) ? today : displayedMonth.atEndOfMonth();
-        Stats s = collectStats(start, end);
-        totalHoursText.setText(formatDurationHours(s.totalHours));
-        workDaysText.setText("工作\n" + s.workDays + "天");
-        leaveDaysText.setText("请假\n" + s.leaveDays + "天");
-        holidayDaysText.setText("公共假日\n" + s.holidayDays + "天");
-        rebuildCalendar(today);
-        rebuildExceptions(end);
+    private void refreshMonth() {
+        LocalDate today = LocalDate.now(); YearMonth now = YearMonth.from(today); LocalDate ws = getWorkStartDate(); YearMonth first = ws == null ? null : YearMonth.from(ws);
+        if (displayedMonth.isAfter(now)) displayedMonth = now; if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
+        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月");
+        previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first)); nextMonthButton.setEnabled(displayedMonth.isBefore(now));
+        LocalDate start = displayedMonth.atDay(1); if (ws != null && start.isBefore(ws)) start = ws; LocalDate end = displayedMonth.equals(now) ? today : displayedMonth.atEndOfMonth();
+        Stats s = collectStats(start, end); totalHoursText.setText(formatDurationHours(s.totalHours));
+        workDaysText.setText("工作\n" + s.workDays + "天"); leaveDaysText.setText("请假\n" + s.leaveDays + "天"); holidayDaysText.setText("公共假日\n" + s.holidayDays + "天");
+        rebuildCalendar(today); rebuildExceptions(end);
     }
 
     private void refreshWeek() {
-        LocalDate today = LocalDate.now();
-        LocalDate currentWeek = mondayOf(today);
-        LocalDate workStart = getWorkStartDate();
-        LocalDate firstWeek = workStart == null ? null : mondayOf(workStart);
-        if (displayedWeekStart.isAfter(currentWeek)) displayedWeekStart = currentWeek;
-        if (firstWeek != null && displayedWeekStart.isBefore(firstWeek)) displayedWeekStart = firstWeek;
-        LocalDate weekEnd = displayedWeekStart.plusDays(6);
-        LocalDate start = displayedWeekStart;
-        if (workStart != null && start.isBefore(workStart)) start = workStart;
-        LocalDate end = weekEnd.isAfter(today) ? today : weekEnd;
-        DateTimeFormatter f = DateTimeFormatter.ofPattern("M月d日");
-        weekTitle.setText(displayedWeekStart.format(f) + " - " + weekEnd.format(f));
-        previousWeekButton.setEnabled(firstWeek == null || displayedWeekStart.isAfter(firstWeek));
-        nextWeekButton.setEnabled(displayedWeekStart.isBefore(currentWeek));
-        weekDetailsContainer.removeAllViews();
-        if (start.isAfter(end)) {
-            weekSummaryText.setText("本周尚未开始工作");
-            weekDetailsContainer.addView(text("工作开始日期之后才会统计。", 13, false));
-            return;
-        }
+        LocalDate today = LocalDate.now(), cur = mondayOf(today), ws = getWorkStartDate(), first = ws == null ? null : mondayOf(ws);
+        if (displayedWeekStart.isAfter(cur)) displayedWeekStart = cur; if (first != null && displayedWeekStart.isBefore(first)) displayedWeekStart = first;
+        LocalDate weekEnd = displayedWeekStart.plusDays(6), start = displayedWeekStart; if (ws != null && start.isBefore(ws)) start = ws; LocalDate end = weekEnd.isAfter(today) ? today : weekEnd;
+        DateTimeFormatter f = DateTimeFormatter.ofPattern("M月d日"); weekTitle.setText(displayedWeekStart.format(f) + " - " + weekEnd.format(f));
+        previousWeekButton.setEnabled(first == null || displayedWeekStart.isAfter(first)); nextWeekButton.setEnabled(displayedWeekStart.isBefore(cur)); weekDetailsContainer.removeAllViews();
+        if (start.isAfter(end)) { weekSummaryText.setText("本周尚未开始工作"); return; }
         Stats s = collectStats(start, end);
-        weekSummaryText.setText("总工时：" + formatDurationHours(s.totalHours)
-                + "\n工作：" + s.workDays + "天 · 请假：" + s.leaveDays + "天 · 公共假日：" + s.holidayDays + "天"
-                + " · 休息：" + s.restDays + "天 · 自定义：" + s.overrideDays + "天");
+        weekSummaryText.setText("总工时：" + formatDurationHours(s.totalHours) + "（其中加班 " + formatDurationHours(s.overtimeHours) + "）\n工作：" + s.workDays + "天 · 请假：" + s.leaveDays + "天 · 公共假日：" + s.holidayDays + "天 · 休息：" + s.restDays + "天");
         addPeriodDetails(weekDetailsContainer, start, end, true, true);
     }
 
     private void rebuildCalendar(LocalDate today) {
-        calendarGrid.removeAllViews();
-        String[] headers = {"一", "二", "三", "四", "五", "六", "日"};
-        for (int i = 0; i < 7; i++) {
-            TextView h = text(headers[i], 13, true);
-            h.setGravity(Gravity.CENTER);
-            if (i >= 5) h.setTextColor(0xFF5F6368);
-            calendarGrid.addView(h, gridParams());
-        }
-        LocalDate workStart = getWorkStartDate();
-        int leading = displayedMonth.atDay(1).getDayOfWeek().getValue() - 1;
-        int days = displayedMonth.lengthOfMonth();
-        int cells = ((leading + days + 6) / 7) * 7;
-        float dailyHours = getConfiguredDailyHours();
-
-        for (int i = 0; i < cells; i++) {
-            int day = i - leading + 1;
-            if (day < 1 || day > days) {
-                calendarGrid.addView(text("", 13, false), gridParams());
-                continue;
-            }
-            LocalDate date = displayedMonth.atDay(day);
-            boolean future = date.isAfter(today);
-            boolean beforeStart = workStart != null && date.isBefore(workStart);
-            boolean weekend = date.getDayOfWeek() == DayOfWeek.SATURDAY || date.getDayOfWeek() == DayOfWeek.SUNDAY;
-            boolean holiday = !beforeStart && isBankHoliday(date);
-            boolean leave = !holiday && !beforeStart && isLeave(date);
-            boolean manualRest = !holiday && !leave && !beforeStart && isManualRest(date);
-            boolean configured = !beforeStart && isConfiguredWorkDay(date) && !holiday;
-            boolean override = !holiday && !leave && !manualRest && !beforeStart && hasOverride(date);
-            boolean autoRest = !holiday && !leave && !manualRest && !override && !beforeStart && !configured;
-            float hours = (future || beforeStart) ? 0f : getHoursForDate(date, dailyHours, configured);
-
-            LinearLayout cell = vertical();
-            cell.setGravity(Gravity.CENTER);
-            cell.setPadding(dp(2), dp(6), dp(2), dp(5));
-            if (date.equals(today)) cell.setBackgroundColor(0xFFE8F0FE);
-            else if (leave) cell.setBackgroundColor(0xFFEAF2FF);
-            else if (override) cell.setBackgroundColor(0xFFFFF4E5);
-            else if (holiday) cell.setBackgroundColor(0xFFFFEBEE);
-            else if (autoRest || manualRest || weekend) cell.setBackgroundColor(0xFFF1F3F4);
-
-            TextView dt = text(String.valueOf(day), 14, date.equals(today));
-            dt.setGravity(Gravity.CENTER);
-            if (future || beforeStart) dt.setTextColor(0xFF9AA0A6);
-            else if (weekend && !leave && !override && !holiday) dt.setTextColor(0xFF5F6368);
-            cell.addView(dt);
-
-            String status = "";
-            if (beforeStart) status = "未开始";
-            else if (!future) {
-                if (holiday) status = "公共假日";
-                else if (leave) status = "请假";
-                else if (manualRest || autoRest) status = "休息";
-                else if (hours > 0f) status = shortHours(hours) + (override ? "*" : "");
-            }
-            TextView st = text(status, 10, leave || holiday || manualRest || override || autoRest);
-            st.setGravity(Gravity.CENTER);
-            if ((weekend || autoRest) && !leave && !override && !holiday) st.setTextColor(0xFF5F6368);
-            cell.addView(st);
-
-            if (!future && !beforeStart) {
-                cell.setOnClickListener(v -> {
-                    if (isBankHoliday(date)) Toast.makeText(this, getBankHolidayName(date) + "：公共假日不计工时", Toast.LENGTH_SHORT).show();
-                    else showEditDayDialog(date);
-                });
-            }
-            calendarGrid.addView(cell, gridParams());
+        calendarGrid.removeAllViews(); String[] hs = {"一","二","三","四","五","六","日"};
+        for (int i=0;i<7;i++){TextView h=text(hs[i],13,true);h.setGravity(Gravity.CENTER);if(i>=5)h.setTextColor(0xFF5F6368);calendarGrid.addView(h,gridParams());}
+        LocalDate ws=getWorkStartDate(); int leading=displayedMonth.atDay(1).getDayOfWeek().getValue()-1, days=displayedMonth.lengthOfMonth(), cells=((leading+days+6)/7)*7; float daily=getConfiguredDailyHours();
+        for(int i=0;i<cells;i++){
+            int day=i-leading+1; if(day<1||day>days){calendarGrid.addView(text("",13,false),gridParams());continue;}
+            LocalDate d=displayedMonth.atDay(day); boolean future=d.isAfter(today), before=ws!=null&&d.isBefore(ws), weekend=d.getDayOfWeek()==DayOfWeek.SATURDAY||d.getDayOfWeek()==DayOfWeek.SUNDAY;
+            boolean holiday=!before&&isBankHoliday(d), leave=!holiday&&!before&&isLeave(d), manualRest=!holiday&&!leave&&!before&&isManualRest(d), configured=!before&&isConfiguredWorkDay(d)&&!holiday, override=!holiday&&!leave&&!manualRest&&!before&&hasOverride(d), autoRest=!holiday&&!leave&&!manualRest&&!override&&!before&&!configured;
+            float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured), overtime=(future||before)?0:getOvertimeHours(d), total=normal+overtime;
+            LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);cell.setPadding(dp(2),dp(6),dp(2),dp(5));
+            if(d.equals(today))cell.setBackgroundColor(0xFFE8F0FE);else if(leave)cell.setBackgroundColor(0xFFEAF2FF);else if(overtime>0)cell.setBackgroundColor(0xFFE8F5E9);else if(override)cell.setBackgroundColor(0xFFFFF4E5);else if(holiday)cell.setBackgroundColor(0xFFFFEBEE);else if(autoRest||manualRest||weekend)cell.setBackgroundColor(0xFFF1F3F4);
+            TextView dt=text(String.valueOf(day),14,d.equals(today));dt.setGravity(Gravity.CENTER);if(future||before)dt.setTextColor(0xFF9AA0A6);cell.addView(dt);
+            String status=""; if(before)status="未开始";else if(!future){if(holiday)status="公共假日";else if(leave)status="请假";else if(manualRest||autoRest)status=overtime>0?"加班 "+shortHours(overtime):"休息";else if(total>0)status=shortHours(total)+(overtime>0?" 加班":"");}
+            TextView st=text(status,10,leave||holiday||manualRest||override||autoRest||overtime>0);st.setGravity(Gravity.CENTER);cell.addView(st);
+            if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：公共假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
+            calendarGrid.addView(cell,gridParams());
         }
     }
 
-    private void rebuildExceptions(LocalDate end) {
-        exceptionsContainer.removeAllViews();
-        LocalDate start = displayedMonth.atDay(1);
-        LocalDate ws = getWorkStartDate();
-        if (ws != null && start.isBefore(ws)) start = ws;
-        if (start.isAfter(end)) {
-            exceptionsContainer.addView(text("本月尚未开始工作", 14, false));
-            return;
-        }
-        addPeriodDetails(exceptionsContainer, start, end, false, false);
-    }
+    private void rebuildExceptions(LocalDate end) { exceptionsContainer.removeAllViews(); LocalDate start=displayedMonth.atDay(1),ws=getWorkStartDate(); if(ws!=null&&start.isBefore(ws))start=ws; if(start.isAfter(end)){exceptionsContainer.addView(text("本月尚未开始工作",14,false));return;} addPeriodDetails(exceptionsContainer,start,end,false,false); }
 
     private void addPeriodDetails(LinearLayout container, LocalDate start, LocalDate end, boolean includeNormal, boolean includeAutoRest) {
-        container.removeAllViews();
-        float dailyHours = getConfiguredDailyHours();
-        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("M月d日 E", Locale.CHINA);
-        int count = 0;
-        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
-            boolean holiday = isBankHoliday(date);
-            boolean leave = !holiday && isLeave(date);
-            boolean manualRest = !holiday && !leave && isManualRest(date);
-            boolean configured = isConfiguredWorkDay(date) && !holiday;
-            boolean override = !holiday && !leave && !manualRest && hasOverride(date);
-            boolean autoRest = !holiday && !leave && !manualRest && !override && !configured;
-            float hours = getHoursForDate(date, dailyHours, configured);
-            String line = null;
-            if (holiday) line = date.format(fmt) + " · 公共假日 · " + getBankHolidayName(date) + " · 0 小时";
-            else if (leave) {
-                String note = getLeaveNote(date);
-                line = date.format(fmt) + " · 请假" + (note.isEmpty() ? "" : " · " + note) + " · 0 小时";
-            } else if (manualRest) line = date.format(fmt) + " · 休息 · 手动修改 · 0 小时";
-            else if (override) {
-                String timeText = getDayTimeSummary(date);
-                line = date.format(fmt) + " · 自定义工时 · " + formatDurationHours(hours) + (timeText.isEmpty() ? "" : " · " + timeText);
-            } else if (includeAutoRest && autoRest) line = date.format(fmt) + " · 休息 · 自动规则 · 0 小时";
-            else if (includeNormal && hours > 0f) line = date.format(fmt) + " · 正常上班 · " + formatDurationHours(hours);
-            if (line != null) {
-                TextView row = text(line, 13, holiday || leave || manualRest || override);
-                row.setPadding(0, dp(5), 0, dp(5));
-                container.addView(row);
-                count++;
-            }
+        container.removeAllViews(); float daily=getConfiguredDailyHours(); DateTimeFormatter f=DateTimeFormatter.ofPattern("M月d日 E",Locale.CHINA); int count=0;
+        for(LocalDate d=start;!d.isAfter(end);d=d.plusDays(1)){
+            boolean holiday=isBankHoliday(d),leave=!holiday&&isLeave(d),manualRest=!holiday&&!leave&&isManualRest(d),configured=isConfiguredWorkDay(d)&&!holiday,override=!holiday&&!leave&&!manualRest&&hasOverride(d),autoRest=!holiday&&!leave&&!manualRest&&!override&&!configured;
+            float base=getBaseHoursForDate(d,daily,configured),ot=getOvertimeHours(d); String line=null;
+            if(holiday)line=d.format(f)+" · 公共假日 · "+getBankHolidayName(d)+" · 0 小时";
+            else if(leave)line=d.format(f)+" · 请假"+(getLeaveNote(d).isEmpty()?"":" · "+getLeaveNote(d))+" · 0 小时";
+            else if(manualRest)line=d.format(f)+" · 休息 · 手动修改";
+            else if(override)line=d.format(f)+" · 自定义工时 · "+formatDurationHours(base)+(getDayTimeSummary(d).isEmpty()?"":" · "+getDayTimeSummary(d));
+            else if(includeAutoRest&&autoRest)line=d.format(f)+" · 休息 · 自动规则";
+            else if(includeNormal&&base>0)line=d.format(f)+" · 正常上班 · "+formatDurationHours(base);
+            if(ot>0){String otText="加班 "+getOvertimeTimeSummary(d)+" · "+formatDurationHours(ot);line=line==null?d.format(f)+" · "+otText:line+" · "+otText;}
+            if(line!=null){TextView row=text(line,13,holiday||leave||manualRest||override||ot>0);row.setPadding(0,dp(5),0,dp(5));container.addView(row);count++;}
         }
-        if (count == 0) {
-            String value = includeNormal ? "这一周没有可显示的记录。" : "本月无公共假日、请假、手动休息或自定义工时记录。";
-            TextView none = text(value, 13, false);
-            none.setPadding(0, dp(8), 0, 0);
-            container.addView(none);
-        }
-    }
-
-    private void showDatePicker(boolean startPicker) {
-        LocalDate initial = startPicker ? rangeStart : rangeEnd;
-        LocalDate today = LocalDate.now();
-        LocalDate ws = getWorkStartDate();
-        if (ws != null && initial.isBefore(ws)) initial = ws;
-        DatePickerDialog dialog = new DatePickerDialog(this, (view, y, m, d) -> {
-            LocalDate selected = LocalDate.of(y, m + 1, d);
-            if (selected.isAfter(today)) selected = today;
-            if (ws != null && selected.isBefore(ws)) selected = ws;
-            if (startPicker) rangeStart = selected;
-            else rangeEnd = selected;
-            updateRangeButtons();
-        }, initial.getYear(), initial.getMonthValue() - 1, initial.getDayOfMonth());
-        dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
-        if (ws != null) dialog.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
-        dialog.show();
-    }
-
-    private void updateRangeButtons() {
-        DateTimeFormatter f = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        rangeStartButton.setText(rangeStart.format(f));
-        rangeEndButton.setText(rangeEnd.format(f));
-    }
-
-    private void calculateRange() {
-        rangeDetailsContainer.removeAllViews();
-        LocalDate today = LocalDate.now();
-        LocalDate ws = getWorkStartDate();
-        LocalDate start = rangeStart;
-        LocalDate end = rangeEnd.isAfter(today) ? today : rangeEnd;
-        if (ws != null && start.isBefore(ws)) start = ws;
-        if (start.isAfter(end)) {
-            rangeSummaryText.setText("开始日期不能晚于结束日期");
-            rangeDetailsContainer.addView(text("请重新选择日期范围。", 13, false));
-            return;
-        }
-        Stats s = collectStats(start, end);
-        long days = Duration.between(start.atStartOfDay(), end.plusDays(1).atStartOfDay()).toDays();
-        rangeSummaryText.setText(start + " 至 " + end + "\n总工时：" + formatDurationHours(s.totalHours)
-                + "\n工作：" + s.workDays + "天 · 请假：" + s.leaveDays + "天 · 公共假日：" + s.holidayDays + "天"
-                + " · 休息：" + s.restDays + "天 · 自定义：" + s.overrideDays + "天\n范围共 " + days + " 天");
-        addPeriodDetails(rangeDetailsContainer, start, end, false, true);
-    }
-
-    private Stats collectStats(LocalDate start, LocalDate end) {
-        Stats s = new Stats();
-        if (start == null || end == null || start.isAfter(end)) return s;
-        float dailyHours = getConfiguredDailyHours();
-        LocalDate ws = getWorkStartDate();
-        for (LocalDate date = start; !date.isAfter(end); date = date.plusDays(1)) {
-            if (ws != null && date.isBefore(ws)) continue;
-            boolean holiday = isBankHoliday(date);
-            boolean leave = !holiday && isLeave(date);
-            boolean manualRest = !holiday && !leave && isManualRest(date);
-            boolean configured = isConfiguredWorkDay(date) && !holiday;
-            boolean override = !holiday && !leave && !manualRest && hasOverride(date);
-            boolean autoRest = !holiday && !leave && !manualRest && !override && !configured;
-            float hours = getHoursForDate(date, dailyHours, configured);
-            s.totalHours += hours;
-            if (hours > 0f) s.workDays++;
-            if (leave) s.leaveDays++;
-            if (holiday) s.holidayDays++;
-            if (manualRest || autoRest) s.restDays++;
-            if (override) s.overrideDays++;
-        }
-        return s;
-    }
-
-    private static class Stats {
-        float totalHours;
-        int workDays, leaveDays, holidayDays, restDays, overrideDays;
+        if(count==0)container.addView(text(includeNormal?"这一周没有可显示的记录。":"本月无公共假日、请假、手动休息、自定义工时或加班记录。",13,false));
     }
 
     private void showEditDayDialog(LocalDate date) {
-        LocalDate ws = getWorkStartDate();
-        if (ws != null && date.isBefore(ws)) return;
+        LocalDate ws=getWorkStartDate(); if(ws!=null&&date.isBefore(ws))return;
+        float daily=getConfiguredDailyHours(); boolean configured=isConfiguredWorkDay(date), hasOverride=hasOverride(date);
+        String defaultStart=prefs.getString(START_TIME_KEY,"09:00"),defaultEnd=prefs.getString(END_TIME_KEY,"17:30"); int defaultBreak=prefs.getInt(BREAK_MINUTES_KEY,30);
+        String currentStart=prefs.getString(dayStartKey(date),defaultStart),currentEnd=prefs.getString(dayEndKey(date),defaultEnd); int currentBreak=prefs.getInt(dayBreakKey(date),defaultBreak);
+        boolean hasOt=hasOvertime(date); String currentOtStart=prefs.getString(overtimeStartKey(date),currentEnd),currentOtEnd=prefs.getString(overtimeEndKey(date),currentEnd);
 
-        float dailyHours = getConfiguredDailyHours();
-        boolean configured = isConfiguredWorkDay(date);
-        boolean hasOverride = hasOverride(date);
-        String defaultStart = prefs.getString(START_TIME_KEY, "09:00");
-        String defaultEnd = prefs.getString(END_TIME_KEY, "17:30");
-        int defaultBreak = prefs.getInt(BREAK_MINUTES_KEY, 30);
-        String currentStart = prefs.getString(dayStartKey(date), defaultStart);
-        String currentEnd = prefs.getString(dayEndKey(date), defaultEnd);
-        int currentBreak = prefs.getInt(dayBreakKey(date), defaultBreak);
+        ScrollView sc=new ScrollView(this); LinearLayout box=vertical(); box.setPadding(dp(22),dp(8),dp(22),dp(8)); sc.addView(box);
+        box.addView(text("当天状态",14,true)); RadioGroup group=new RadioGroup(this); RadioButton normal=new RadioButton(this),leave=new RadioButton(this),rest=new RadioButton(this); normal.setText("正常上班");leave.setText("请假（0 小时）");rest.setText("休息（0 小时）");group.addView(normal);group.addView(leave);group.addView(rest);box.addView(group);
+        if(isLeave(date))leave.setChecked(true);else if(isManualRest(date)||(!configured&&!hasOverride))rest.setChecked(true);else normal.setChecked(true);
+        TextView reasonLabel=text("请假原因 / 描述（可选）",14,false);reasonLabel.setPadding(0,dp(8),0,0);box.addView(reasonLabel);EditText reason=new EditText(this);reason.setMinLines(2);reason.setMaxLines(4);reason.setText(getLeaveNote(date));box.addView(reason);
+        TextView timeTitle=text("当天上下班时间",14,true);timeTitle.setPadding(0,dp(12),0,dp(6));box.addView(timeTitle);LinearLayout tr=horizontal();Button startButton=button(currentStart),endButton=button(currentEnd);tr.addView(startButton,new LinearLayout.LayoutParams(0,dp(50),1));TextView to=text(" 至 ",14,false);to.setGravity(Gravity.CENTER);tr.addView(to,new LinearLayout.LayoutParams(dp(38),dp(50)));tr.addView(endButton,new LinearLayout.LayoutParams(0,dp(50),1));box.addView(tr);
+        TextView breakLabel=text("当天休息时间（分钟）",14,false);breakLabel.setPadding(0,dp(10),0,0);box.addView(breakLabel);EditText breakInput=new EditText(this);breakInput.setSingleLine(true);breakInput.setInputType(InputType.TYPE_CLASS_NUMBER);breakInput.setText(String.valueOf(currentBreak));box.addView(breakInput);
 
-        LinearLayout box = vertical();
-        box.setPadding(dp(22), dp(8), dp(22), 0);
-        box.addView(text("当天状态", 14, true));
+        TextView otTitle=text("加班",14,true);otTitle.setPadding(0,dp(16),0,dp(4));box.addView(otTitle);CheckBox overtimeCheck=new CheckBox(this);overtimeCheck.setText("这一天有加班");overtimeCheck.setChecked(hasOt);box.addView(overtimeCheck);
+        LinearLayout otr=horizontal();Button otStartButton=button(currentOtStart),otEndButton=button(currentOtEnd);otr.addView(otStartButton,new LinearLayout.LayoutParams(0,dp(50),1));TextView otTo=text(" 至 ",14,false);otTo.setGravity(Gravity.CENTER);otr.addView(otTo,new LinearLayout.LayoutParams(dp(38),dp(50)));otr.addView(otEndButton,new LinearLayout.LayoutParams(0,dp(50),1));box.addView(otr);
+        TextView calculated=text("",15,true);calculated.setPadding(0,dp(10),0,0);box.addView(calculated);
+        final String[] ss={currentStart},se={currentEnd},os={currentOtStart},oe={currentOtEnd};
+        Runnable update=()->{float base=0,ot=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());Float h=calculateHours(ss[0],se[0],b==null?-1:b);if(h!=null)base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h!=null)ot=h;}calculated.setText("正常工时："+formatDurationHours(base)+"\n加班："+formatDurationHours(ot)+"\n合计："+formatDurationHours(base+ot));};
+        startButton.setOnClickListener(v->showTimePicker(ss[0],x->{ss[0]=x;startButton.setText(x);update.run();})); endButton.setOnClickListener(v->showTimePicker(se[0],x->{se[0]=x;endButton.setText(x);if(!hasOt&&!overtimeCheck.isChecked()){os[0]=x;oe[0]=x;otStartButton.setText(x);otEndButton.setText(x);}update.run();}));
+        otStartButton.setOnClickListener(v->showTimePicker(os[0],x->{os[0]=x;otStartButton.setText(x);update.run();}));otEndButton.setOnClickListener(v->showTimePicker(oe[0],x->{oe[0]=x;otEndButton.setText(x);update.run();}));
+        Runnable controls=()->{boolean n=normal.isChecked(),l=leave.isChecked(),o=overtimeCheck.isChecked();startButton.setEnabled(n);endButton.setEnabled(n);breakInput.setEnabled(n);reason.setEnabled(l);otStartButton.setEnabled(o);otEndButton.setEnabled(o);update.run();};group.setOnCheckedChangeListener((g,id)->controls.run());overtimeCheck.setOnCheckedChangeListener((b,c)->controls.run());controls.run();
 
-        RadioGroup group = new RadioGroup(this);
-        RadioButton normal = new RadioButton(this);
-        normal.setText("正常上班");
-        RadioButton leave = new RadioButton(this);
-        leave.setText("请假（0 小时）");
-        RadioButton rest = new RadioButton(this);
-        rest.setText("休息（0 小时）");
-        group.addView(normal);
-        group.addView(leave);
-        group.addView(rest);
-        box.addView(group);
-
-        if (isLeave(date)) leave.setChecked(true);
-        else if (isManualRest(date) || (!configured && !hasOverride)) rest.setChecked(true);
-        else normal.setChecked(true);
-
-        TextView reasonLabel = text("请假原因 / 描述（可选）", 14, false);
-        reasonLabel.setPadding(0, dp(8), 0, 0);
-        box.addView(reasonLabel);
-        EditText reason = new EditText(this);
-        reason.setMinLines(2);
-        reason.setMaxLines(4);
-        reason.setHint("例如：看医生、年假、家庭原因");
-        reason.setText(getLeaveNote(date));
-        box.addView(reason);
-
-        TextView timeTitle = text("当天上下班时间", 14, true);
-        timeTitle.setPadding(0, dp(12), 0, dp(6));
-        box.addView(timeTitle);
-
-        LinearLayout timeRow = horizontal();
-        Button startButton = button(currentStart);
-        Button endButton = button(currentEnd);
-        timeRow.addView(startButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
-        TextView to = text(" 至 ", 14, false);
-        to.setGravity(Gravity.CENTER);
-        timeRow.addView(to, new LinearLayout.LayoutParams(dp(38), dp(50)));
-        timeRow.addView(endButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
-        box.addView(timeRow);
-
-        TextView breakLabel = text("当天休息时间（分钟）", 14, false);
-        breakLabel.setPadding(0, dp(10), 0, 0);
-        box.addView(breakLabel);
-        EditText breakInput = new EditText(this);
-        breakInput.setSingleLine(true);
-        breakInput.setInputType(InputType.TYPE_CLASS_NUMBER);
-        breakInput.setText(String.valueOf(currentBreak));
-        box.addView(breakInput);
-
-        TextView calculated = text("", 15, true);
-        calculated.setPadding(0, dp(8), 0, 0);
-        box.addView(calculated);
-
-        final String[] selectedStart = {currentStart};
-        final String[] selectedEnd = {currentEnd};
-
-        Runnable updateCalculated = () -> {
-            if (!normal.isChecked()) {
-                calculated.setText("当天工时：0 小时");
-                return;
-            }
-            Integer breakMinutes = parseBreakMinutes(breakInput.getText().toString());
-            Float hours = calculateHours(selectedStart[0], selectedEnd[0], breakMinutes == null ? -1 : breakMinutes);
-            calculated.setText(hours == null ? "当天工时：请检查时间设置" : "当天工时：" + formatDurationHours(hours));
-        };
-
-        startButton.setOnClickListener(v -> showTimePicker(selectedStart[0], value -> {
-            selectedStart[0] = value;
-            startButton.setText(value);
-            updateCalculated.run();
-        }));
-        endButton.setOnClickListener(v -> showTimePicker(selectedEnd[0], value -> {
-            selectedEnd[0] = value;
-            endButton.setText(value);
-            updateCalculated.run();
-        }));
-        breakInput.setOnFocusChangeListener((v, hasFocus) -> {
-            if (!hasFocus) updateCalculated.run();
-        });
-
-        Runnable controls = () -> {
-            boolean n = normal.isChecked();
-            boolean l = leave.isChecked();
-            startButton.setEnabled(n);
-            endButton.setEnabled(n);
-            breakInput.setEnabled(n);
-            timeTitle.setEnabled(n);
-            breakLabel.setEnabled(n);
-            reason.setEnabled(l);
-            reasonLabel.setEnabled(l);
-            updateCalculated.run();
-        };
-        group.setOnCheckedChangeListener((g, id) -> controls.run());
-        controls.run();
-
-        DateTimeFormatter titleFmt = DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE", Locale.CHINA);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(date.format(titleFmt))
-                .setView(box)
-                .setPositiveButton("保存", null)
-                .setNeutralButton("恢复自动", null)
-                .setNegativeButton("取消", null)
-                .create();
-
-        dialog.setOnShowListener(x -> {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                String note = reason.getText().toString().trim();
-                float value = 0f;
-                int breakMinutes = 0;
-                String target;
-
-                if (normal.isChecked()) {
-                    target = "正常上班";
-                    Integer parsedBreak = parseBreakMinutes(breakInput.getText().toString());
-                    if (parsedBreak == null || parsedBreak < 0 || parsedBreak >= 1440) {
-                        breakInput.setError("请输入 0～1439 分钟");
-                        return;
-                    }
-                    breakMinutes = parsedBreak;
-                    Float calculatedHours = calculateHours(selectedStart[0], selectedEnd[0], breakMinutes);
-                    if (calculatedHours == null) {
-                        Toast.makeText(this, "请检查上下班时间和休息时间", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    value = calculatedHours;
-                } else if (leave.isChecked()) {
-                    target = "请假";
-                } else {
-                    target = "休息";
-                }
-
-                final float confirmed = value;
-                final int confirmedBreak = breakMinutes;
-                StringBuilder msg = new StringBuilder()
-                        .append("日期：").append(date.format(titleFmt))
-                        .append("\n状态：").append(target);
-                if (normal.isChecked()) {
-                    msg.append("\n上班：").append(selectedStart[0])
-                            .append("\n下班：").append(selectedEnd[0])
-                            .append("\n休息：").append(confirmedBreak).append(" 分钟");
-                }
-                msg.append("\n工时：").append(formatDurationHours(confirmed));
-                if (leave.isChecked() && !note.isEmpty()) msg.append("\n原因：").append(note);
-
-                new AlertDialog.Builder(this)
-                        .setTitle("确认修改？")
-                        .setMessage(msg.toString())
-                        .setNegativeButton("取消", null)
-                        .setPositiveButton("确认修改", (d, which) -> {
-                            SharedPreferences.Editor e = prefs.edit();
-                            if (leave.isChecked()) {
-                                e.putBoolean(leaveKey(date), true)
-                                        .remove(restKey(date)).remove(overrideKey(date))
-                                        .remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));
-                                if (note.isEmpty()) e.remove(leaveNoteKey(date));
-                                else e.putString(leaveNoteKey(date), note);
-                            } else if (rest.isChecked()) {
-                                e.putBoolean(restKey(date), true)
-                                        .remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(overrideKey(date))
-                                        .remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));
-                            } else {
-                                e.remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date));
-                                boolean sameAsDefault = configured
-                                        && selectedStart[0].equals(defaultStart)
-                                        && selectedEnd[0].equals(defaultEnd)
-                                        && confirmedBreak == defaultBreak
-                                        && Math.abs(confirmed - dailyHours) < 0.0001f;
-                                if (sameAsDefault) {
-                                    e.remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));
-                                } else {
-                                    e.putFloat(overrideKey(date), confirmed)
-                                            .putString(dayStartKey(date), selectedStart[0])
-                                            .putString(dayEndKey(date), selectedEnd[0])
-                                            .putInt(dayBreakKey(date), confirmedBreak);
-                                }
-                            }
-                            e.apply();
-                            dialog.dismiss();
-                            refreshAll();
-                            Toast.makeText(this, "修改已保存", Toast.LENGTH_SHORT).show();
-                        }).show();
-            });
-
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> new AlertDialog.Builder(this)
-                    .setTitle("确认恢复自动？")
-                    .setMessage("将清除当天手动状态、上下班时间和工时，重新按全局工作时间及休息规则自动计算。")
-                    .setNegativeButton("取消", null)
-                    .setPositiveButton("确认恢复", (d, which) -> {
-                        prefs.edit()
-                                .remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date))
-                                .remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date)).apply();
-                        dialog.dismiss();
-                        refreshAll();
-                        Toast.makeText(this, "已恢复自动计算", Toast.LENGTH_SHORT).show();
-                    }).show());
-        });
+        DateTimeFormatter tf=DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE",Locale.CHINA); AlertDialog dialog=new AlertDialog.Builder(this).setTitle(date.format(tf)).setView(sc).setPositiveButton("保存",null).setNeutralButton("恢复自动",null).setNegativeButton("取消",null).create();
+        dialog.setOnShowListener(x->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String note=reason.getText().toString().trim();float base=0,ot=0;int br=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());if(b==null||b<0||b>=1440){breakInput.setError("请输入 0～1439 分钟");return;}br=b;Float h=calculateHours(ss[0],se[0],br);if(h==null){Toast.makeText(this,"请检查上下班时间",Toast.LENGTH_SHORT).show();return;}base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h==null||h<=0){Toast.makeText(this,"请设置正确的加班开始和结束时间",Toast.LENGTH_SHORT).show();return;}ot=h;}final float fBase=base,fOt=ot;final int fBr=br;String target=leave.isChecked()?"请假":rest.isChecked()?"休息":"正常上班";String msg="日期："+date.format(tf)+"\n状态："+target+(normal.isChecked()?"\n上班："+ss[0]+"\n下班："+se[0]+"\n休息："+fBr+" 分钟":"")+(overtimeCheck.isChecked()?"\n加班："+os[0]+"–"+oe[0]+"（"+formatDurationHours(fOt)+"）":"")+"\n总工时："+formatDurationHours(fBase+fOt);
+            new AlertDialog.Builder(this).setTitle("确认修改？").setMessage(msg).setNegativeButton("取消",null).setPositiveButton("确认修改",(d,w)->{SharedPreferences.Editor e=prefs.edit();if(leave.isChecked()){e.putBoolean(leaveKey(date),true).remove(restKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));if(note.isEmpty())e.remove(leaveNoteKey(date));else e.putString(leaveNoteKey(date),note);}else if(rest.isChecked()){e.putBoolean(restKey(date),true).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));}else{e.remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date));boolean same=configured&&ss[0].equals(defaultStart)&&se[0].equals(defaultEnd)&&fBr==defaultBreak&&Math.abs(fBase-daily)<0.0001f;if(same)e.remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));else e.putFloat(overrideKey(date),fBase).putString(dayStartKey(date),ss[0]).putString(dayEndKey(date),se[0]).putInt(dayBreakKey(date),fBr);}if(overtimeCheck.isChecked())e.putString(overtimeStartKey(date),os[0]).putString(overtimeEndKey(date),oe[0]);else e.remove(overtimeStartKey(date)).remove(overtimeEndKey(date));e.apply();dialog.dismiss();refreshAll();Toast.makeText(this,"修改已保存",Toast.LENGTH_SHORT).show();}).show();});
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->new AlertDialog.Builder(this).setTitle("确认恢复自动？").setMessage("将清除当天手动状态、上下班时间和加班时间，重新按自动规则计算。").setNegativeButton("取消",null).setPositiveButton("确认恢复",(d,w)->{prefs.edit().remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date)).remove(overtimeStartKey(date)).remove(overtimeEndKey(date)).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date)).apply();dialog.dismiss();refreshAll();}).show());});
         dialog.show();
     }
 
-    private interface TimeSelectedListener {
-        void onSelected(String value);
-    }
+    private void showDatePicker(boolean startPicker){LocalDate initial=startPicker?rangeStart:rangeEnd,today=LocalDate.now(),ws=getWorkStartDate();if(ws!=null&&initial.isBefore(ws))initial=ws;DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate s=LocalDate.of(y,m+1,day);if(s.isAfter(today))s=today;if(ws!=null&&s.isBefore(ws))s=ws;if(startPicker)rangeStart=s;else rangeEnd=s;updateRangeButtons();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
+    private void updateRangeButtons(){DateTimeFormatter f=DateTimeFormatter.ofPattern("yyyy-MM-dd");rangeStartButton.setText(rangeStart.format(f));rangeEndButton.setText(rangeEnd.format(f));}
+    private void calculateRange(){if(rangeDetailsContainer==null)return;rangeDetailsContainer.removeAllViews();LocalDate today=LocalDate.now(),ws=getWorkStartDate(),start=rangeStart,end=rangeEnd.isAfter(today)?today:rangeEnd;if(ws!=null&&start.isBefore(ws))start=ws;if(start.isAfter(end)){rangeSummaryText.setText("开始日期不能晚于结束日期");return;}Stats s=collectStats(start,end);rangeSummaryText.setText(start+" 至 "+end+"\n总工时："+formatDurationHours(s.totalHours)+"（加班 "+formatDurationHours(s.overtimeHours)+"）\n工作："+s.workDays+"天 · 请假："+s.leaveDays+"天 · 公共假日："+s.holidayDays+"天 · 休息："+s.restDays+"天");addPeriodDetails(rangeDetailsContainer,start,end,false,true);}
+    private Stats collectStats(LocalDate start,LocalDate end){Stats s=new Stats();if(start==null||end==null||start.isAfter(end))return s;float daily=getConfiguredDailyHours();LocalDate ws=getWorkStartDate();for(LocalDate d=start;!d.isAfter(end);d=d.plusDays(1)){if(ws!=null&&d.isBefore(ws))continue;boolean h=isBankHoliday(d),l=!h&&isLeave(d),r=!h&&!l&&isManualRest(d),c=isConfiguredWorkDay(d)&&!h,o=!h&&!l&&!r&&hasOverride(d),a=!h&&!l&&!r&&!o&&!c;float base=getBaseHoursForDate(d,daily,c),ot=getOvertimeHours(d);s.totalHours+=base+ot;s.overtimeHours+=ot;if(base+ot>0)s.workDays++;if(l)s.leaveDays++;if(h)s.holidayDays++;if(r||a)s.restDays++;if(o)s.overrideDays++;}return s;}
+    private static class Stats{float totalHours,overtimeHours;int workDays,leaveDays,holidayDays,restDays,overrideDays;}
 
-    private void showTimePicker(String initial, TimeSelectedListener listener) {
-        LocalTime time = parseTime(initial);
-        if (time == null) time = LocalTime.of(9, 0);
-        new TimePickerDialog(this, (view, hourOfDay, minute) ->
-                listener.onSelected(String.format(Locale.US, "%02d:%02d", hourOfDay, minute)),
-                time.getHour(), time.getMinute(), true).show();
-    }
-
-    private Integer parseBreakMinutes(String raw) {
-        try {
-            return Integer.parseInt(raw.trim());
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
-
-    private Float calculateHours(String startRaw, String endRaw, int breakMinutes) {
-        if (breakMinutes < 0 || breakMinutes >= 1440) return null;
-        LocalTime start = parseTime(startRaw);
-        LocalTime end = parseTime(endRaw);
-        if (start == null || end == null) return null;
-        long minutes = Duration.between(start, end).toMinutes();
-        if (minutes <= 0) minutes += 1440;
-        long workMinutes = minutes - breakMinutes;
-        if (workMinutes < 0) return null;
-        return workMinutes / 60f;
-    }
-
-    private String getDayTimeSummary(LocalDate date) {
-        if (!prefs.contains(dayStartKey(date)) || !prefs.contains(dayEndKey(date))) return "";
-        String start = prefs.getString(dayStartKey(date), "");
-        String end = prefs.getString(dayEndKey(date), "");
-        int breakMinutes = prefs.getInt(dayBreakKey(date), 0);
-        return start + "–" + end + " / 休息" + breakMinutes + "分钟";
-    }
-
-    private boolean isConfiguredWorkDay(LocalDate date) {
-        int index = date.getDayOfWeek().getValue() - 1;
-        boolean weeklyWorkDay = prefs.getBoolean("day_" + index, index < 5);
-        return weeklyWorkDay && !isMonthlyRestDay(date);
-    }
-
-    private boolean isMonthlyRestDay(LocalDate date) {
-        return getMonthlyRestDays().contains(date.getDayOfMonth());
-    }
-
-    private Set<Integer> getMonthlyRestDays() {
-        Set<Integer> result = new HashSet<>();
-        String raw = prefs.getString(MONTHLY_REST_DAYS_KEY, "");
-        if (raw == null || raw.trim().isEmpty()) return result;
-        for (String part : raw.replace('，', ',').split(",")) {
-            try {
-                int value = Integer.parseInt(part.trim());
-                if (value >= 1 && value <= 31) result.add(value);
-            } catch (NumberFormatException ignored) { }
-        }
-        return result;
-    }
-
-    private float getConfiguredDailyHours() {
-        LocalTime start = parseTime(prefs.getString(START_TIME_KEY, "09:00"));
-        LocalTime end = parseTime(prefs.getString(END_TIME_KEY, "17:30"));
-        int breakMinutes = prefs.getInt(BREAK_MINUTES_KEY, 30);
-        if (start == null || end == null) return prefs.getFloat("daily_hours", 8f);
-        long minutes = Duration.between(start, end).toMinutes();
-        if (minutes <= 0) minutes += 1440;
-        return Math.max(0, minutes - breakMinutes) / 60f;
-    }
-
-    private LocalTime parseTime(String raw) {
-        try {
-            return LocalTime.parse(raw, DateTimeFormatter.ofPattern("HH:mm"));
-        } catch (DateTimeParseException | IllegalArgumentException e) {
-            return null;
-        }
-    }
-
-    private LocalDate getWorkStartDate() {
-        String saved = prefs.getString(WORK_START_DATE_KEY, "");
-        if (saved == null || saved.isEmpty()) return null;
-        try {
-            return LocalDate.parse(saved);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
-    }
-
-    private LocalDate mondayOf(LocalDate date) {
-        return date.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-    }
-
-    private float getHoursForDate(LocalDate date, float dailyHours, boolean configuredWorkDay) {
-        LocalDate ws = getWorkStartDate();
-        if (ws != null && date.isBefore(ws)) return 0f;
-        if (isBankHoliday(date) || isLeave(date) || isManualRest(date)) return 0f;
-        return prefs.getFloat(overrideKey(date), configuredWorkDay ? dailyHours : 0f);
-    }
-
-    private boolean hasOverride(LocalDate d) { return prefs.contains(overrideKey(d)); }
-    private boolean isLeave(LocalDate d) { return prefs.getBoolean(leaveKey(d), false); }
-    private boolean isManualRest(LocalDate d) { return prefs.getBoolean(restKey(d), false); }
-    private String getLeaveNote(LocalDate d) { return prefs.getString(leaveNoteKey(d), ""); }
-    private String overrideKey(LocalDate d) { return OVERRIDE_PREFIX + d; }
-    private String dayStartKey(LocalDate d) { return DAY_START_PREFIX + d; }
-    private String dayEndKey(LocalDate d) { return DAY_END_PREFIX + d; }
-    private String dayBreakKey(LocalDate d) { return DAY_BREAK_PREFIX + d; }
-    private String leaveKey(LocalDate d) { return LEAVE_PREFIX + d; }
-    private String leaveNoteKey(LocalDate d) { return LEAVE_NOTE_PREFIX + d; }
-    private String restKey(LocalDate d) { return REST_PREFIX + d; }
-    private boolean isBankHoliday(LocalDate d) { return getBankHolidayName(d) != null; }
-
-    private String getBankHolidayName(LocalDate date) {
-        int year = date.getYear();
-        LocalDate newYear = observedDate(LocalDate.of(year, Month.JANUARY, 1));
-        if (date.equals(newYear)) return "New Year’s Day";
-        LocalDate easter = easterSunday(year);
-        if (date.equals(easter.minusDays(2))) return "Good Friday";
-        if (date.equals(easter.plusDays(1))) return "Easter Monday";
-        LocalDate earlyMay = LocalDate.of(year, Month.MAY, 1).with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY));
-        if (date.equals(earlyMay)) return "Early May bank holiday";
-        LocalDate spring = LocalDate.of(year, Month.MAY, 31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        if (date.equals(spring)) return "Spring bank holiday";
-        LocalDate summer = LocalDate.of(year, Month.AUGUST, 31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        if (date.equals(summer)) return "Summer bank holiday";
-
-        LocalDate christmas = LocalDate.of(year, Month.DECEMBER, 25);
-        LocalDate boxing = LocalDate.of(year, Month.DECEMBER, 26);
-        LocalDate observedChristmas;
-        LocalDate observedBoxing;
-        if (christmas.getDayOfWeek() == DayOfWeek.SATURDAY) {
-            observedChristmas = LocalDate.of(year, Month.DECEMBER, 27);
-            observedBoxing = LocalDate.of(year, Month.DECEMBER, 28);
-        } else if (christmas.getDayOfWeek() == DayOfWeek.SUNDAY) {
-            observedChristmas = LocalDate.of(year, Month.DECEMBER, 27);
-            observedBoxing = LocalDate.of(year, Month.DECEMBER, 26);
-        } else {
-            observedChristmas = christmas;
-            observedBoxing = boxing.getDayOfWeek() == DayOfWeek.SATURDAY ? LocalDate.of(year, Month.DECEMBER, 28) : boxing;
-        }
-        if (date.equals(observedChristmas)) return "Christmas Day";
-        if (date.equals(observedBoxing)) return "Boxing Day";
-        return null;
-    }
-
-    private LocalDate observedDate(LocalDate d) {
-        if (d.getDayOfWeek() == DayOfWeek.SATURDAY) return d.plusDays(2);
-        if (d.getDayOfWeek() == DayOfWeek.SUNDAY) return d.plusDays(1);
-        return d;
-    }
-
-    private LocalDate easterSunday(int year) {
-        int a = year % 19, b = year / 100, c = year % 100, d = b / 4, e = b % 4;
-        int f = (b + 8) / 25, g = (b - f + 1) / 3;
-        int h = (19 * a + b - d - g + 15) % 30, i = c / 4, k = c % 4;
-        int l = (32 + 2 * e + 2 * i - h - k) % 7, m = (a + 11 * h + 22 * l) / 451;
-        int month = (h + l - 7 * m + 114) / 31;
-        int day = ((h + l - 7 * m + 114) % 31) + 1;
-        return LocalDate.of(year, month, day);
-    }
-
-    private String formatDurationHours(float hours) {
-        int mins = Math.round(hours * 60f);
-        int h = mins / 60;
-        int m = mins % 60;
-        if (m == 0) return h + " 小时";
-        if (h == 0) return m + " 分钟";
-        return h + " 小时 " + m + " 分钟";
-    }
-
-    private String shortHours(float h) {
-        int m = Math.round(h * 60f);
-        return m % 60 == 0 ? (m / 60) + "h" : String.format(Locale.US, "%.1fh", h);
-    }
-
-    private TextView statText() {
-        TextView v = text("", 14, true);
-        v.setGravity(Gravity.CENTER);
-        return v;
-    }
-
-    private LinearLayout vertical() {
-        LinearLayout l = new LinearLayout(this);
-        l.setOrientation(LinearLayout.VERTICAL);
-        return l;
-    }
-
-    private LinearLayout horizontal() {
-        LinearLayout l = new LinearLayout(this);
-        l.setOrientation(LinearLayout.HORIZONTAL);
-        return l;
-    }
-
-    private Button button(String s) {
-        Button b = new Button(this);
-        b.setText(s);
-        return b;
-    }
-
-    private TextView text(String s, int sp, boolean bold) {
-        TextView v = new TextView(this);
-        v.setText(s);
-        v.setTextSize(sp);
-        v.setTextColor(0xFF202124);
-        if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        return v;
-    }
-
-    private GridLayout.LayoutParams gridParams() {
-        GridLayout.LayoutParams p = new GridLayout.LayoutParams();
-        p.width = 0;
-        p.height = dp(58);
-        p.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-        p.setMargins(dp(1), dp(1), dp(1), dp(1));
-        return p;
-    }
-
-    private int dp(int v) {
-        return Math.round(v * getResources().getDisplayMetrics().density);
-    }
+    private interface TimeSelectedListener{void onSelected(String value);} private void showTimePicker(String initial,TimeSelectedListener l){LocalTime t=parseTime(initial);if(t==null)t=LocalTime.of(9,0);new TimePickerDialog(this,(v,h,m)->l.onSelected(String.format(Locale.US,"%02d:%02d",h,m)),t.getHour(),t.getMinute(),true).show();}
+    private Integer parseBreakMinutes(String raw){try{return Integer.parseInt(raw.trim());}catch(Exception e){return null;}}
+    private Float calculateHours(String s,String e,int br){if(br<0||br>=1440)return null;LocalTime a=parseTime(s),b=parseTime(e);if(a==null||b==null)return null;long m=Duration.between(a,b).toMinutes();if(m<=0)m+=1440;long w=m-br;return w<0?null:w/60f;}
+    private boolean hasOvertime(LocalDate d){return prefs.contains(overtimeStartKey(d))&&prefs.contains(overtimeEndKey(d));}
+    private float getOvertimeHours(LocalDate d){if(!hasOvertime(d))return 0f;Float h=calculateHours(prefs.getString(overtimeStartKey(d),""),prefs.getString(overtimeEndKey(d),""),0);return h==null?0f:h;}
+    private String getOvertimeTimeSummary(LocalDate d){return hasOvertime(d)?prefs.getString(overtimeStartKey(d),"")+"–"+prefs.getString(overtimeEndKey(d),""):"";}
+    private String getDayTimeSummary(LocalDate d){if(!prefs.contains(dayStartKey(d))||!prefs.contains(dayEndKey(d)))return "";return prefs.getString(dayStartKey(d),"")+"–"+prefs.getString(dayEndKey(d),"")+" / 休息"+prefs.getInt(dayBreakKey(d),0)+"分钟";}
+    private boolean isConfiguredWorkDay(LocalDate d){int i=d.getDayOfWeek().getValue()-1;return prefs.getBoolean("day_"+i,i<5)&&!getMonthlyRestDays().contains(d.getDayOfMonth());}
+    private Set<Integer> getMonthlyRestDays(){Set<Integer>s=new HashSet<>();String raw=prefs.getString(MONTHLY_REST_DAYS_KEY,"");if(raw==null||raw.trim().isEmpty())return s;for(String p:raw.replace('，',',').split(",")){try{int v=Integer.parseInt(p.trim());if(v>=1&&v<=31)s.add(v);}catch(Exception ignored){}}return s;}
+    private float getConfiguredDailyHours(){LocalTime s=parseTime(prefs.getString(START_TIME_KEY,"09:00")),e=parseTime(prefs.getString(END_TIME_KEY,"17:30"));int br=prefs.getInt(BREAK_MINUTES_KEY,30);if(s==null||e==null)return prefs.getFloat("daily_hours",8f);long m=Duration.between(s,e).toMinutes();if(m<=0)m+=1440;return Math.max(0,m-br)/60f;}
+    private LocalTime parseTime(String r){try{return LocalTime.parse(r,DateTimeFormatter.ofPattern("HH:mm"));}catch(Exception e){return null;}}
+    private LocalDate getWorkStartDate(){String s=prefs.getString(WORK_START_DATE_KEY,"");try{return s==null||s.isEmpty()?null:LocalDate.parse(s);}catch(Exception e){return null;}}
+    private LocalDate mondayOf(LocalDate d){return d.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));}
+    private float getBaseHoursForDate(LocalDate d,float daily,boolean configured){LocalDate ws=getWorkStartDate();if(ws!=null&&d.isBefore(ws))return 0;if(isBankHoliday(d)||isLeave(d)||isManualRest(d))return 0;return prefs.getFloat(overrideKey(d),configured?daily:0);}
+    private boolean hasOverride(LocalDate d){return prefs.contains(overrideKey(d));} private boolean isLeave(LocalDate d){return prefs.getBoolean(leaveKey(d),false);} private boolean isManualRest(LocalDate d){return prefs.getBoolean(restKey(d),false);} private String getLeaveNote(LocalDate d){return prefs.getString(leaveNoteKey(d),"");}
+    private String overrideKey(LocalDate d){return OVERRIDE_PREFIX+d;} private String dayStartKey(LocalDate d){return DAY_START_PREFIX+d;} private String dayEndKey(LocalDate d){return DAY_END_PREFIX+d;} private String dayBreakKey(LocalDate d){return DAY_BREAK_PREFIX+d;} private String overtimeStartKey(LocalDate d){return OVERTIME_START_PREFIX+d;} private String overtimeEndKey(LocalDate d){return OVERTIME_END_PREFIX+d;} private String leaveKey(LocalDate d){return LEAVE_PREFIX+d;} private String leaveNoteKey(LocalDate d){return LEAVE_NOTE_PREFIX+d;} private String restKey(LocalDate d){return REST_PREFIX+d;}
+    private boolean isBankHoliday(LocalDate d){return getBankHolidayName(d)!=null;}
+    private String getBankHolidayName(LocalDate date){int y=date.getYear();LocalDate ny=observedDate(LocalDate.of(y,Month.JANUARY,1));if(date.equals(ny))return "New Year’s Day";LocalDate es=easterSunday(y);if(date.equals(es.minusDays(2)))return "Good Friday";if(date.equals(es.plusDays(1)))return "Easter Monday";LocalDate em=LocalDate.of(y,Month.MAY,1).with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY));if(date.equals(em))return "Early May bank holiday";LocalDate sp=LocalDate.of(y,Month.MAY,31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));if(date.equals(sp))return "Spring bank holiday";LocalDate su=LocalDate.of(y,Month.AUGUST,31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));if(date.equals(su))return "Summer bank holiday";LocalDate x=LocalDate.of(y,Month.DECEMBER,25),b=LocalDate.of(y,Month.DECEMBER,26),ox,ob;if(x.getDayOfWeek()==DayOfWeek.SATURDAY){ox=LocalDate.of(y,Month.DECEMBER,27);ob=LocalDate.of(y,Month.DECEMBER,28);}else if(x.getDayOfWeek()==DayOfWeek.SUNDAY){ox=LocalDate.of(y,Month.DECEMBER,27);ob=LocalDate.of(y,Month.DECEMBER,26);}else{ox=x;ob=b.getDayOfWeek()==DayOfWeek.SATURDAY?LocalDate.of(y,Month.DECEMBER,28):b;}if(date.equals(ox))return "Christmas Day";if(date.equals(ob))return "Boxing Day";return null;}
+    private LocalDate observedDate(LocalDate d){if(d.getDayOfWeek()==DayOfWeek.SATURDAY)return d.plusDays(2);if(d.getDayOfWeek()==DayOfWeek.SUNDAY)return d.plusDays(1);return d;}
+    private LocalDate easterSunday(int y){int a=y%19,b=y/100,c=y%100,d=b/4,e=b%4,f=(b+8)/25,g=(b-f+1)/3,h=(19*a+b-d-g+15)%30,i=c/4,k=c%4,l=(32+2*e+2*i-h-k)%7,m=(a+11*h+22*l)/451,mo=(h+l-7*m+114)/31,da=((h+l-7*m+114)%31)+1;return LocalDate.of(y,mo,da);}
+    private String formatDurationHours(float h){int m=Math.round(h*60),hh=m/60,mm=m%60;if(mm==0)return hh+" 小时";if(hh==0)return mm+" 分钟";return hh+" 小时 "+mm+" 分钟";} private String shortHours(float h){int m=Math.round(h*60);return m%60==0?(m/60)+"h":String.format(Locale.US,"%.1fh",h);}
+    private TextView statText(){TextView v=text("",14,true);v.setGravity(Gravity.CENTER);return v;} private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;} private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;} private LinearLayout card(){LinearLayout l=vertical();l.setPadding(dp(14),dp(12),dp(14),dp(12));l.setBackgroundColor(0xFFF8F9FA);return l;} private Button button(String s){Button b=new Button(this);b.setText(s);return b;} private TextView text(String s,int sp,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(sp);v.setTextColor(0xFF202124);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
+    private GridLayout.LayoutParams gridParams(){GridLayout.LayoutParams p=new GridLayout.LayoutParams();p.width=0;p.height=dp(58);p.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);p.setMargins(dp(1),dp(1),dp(1),dp(1));return p;} private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }
