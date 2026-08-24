@@ -1,6 +1,12 @@
-# 上班总时间 WorkHoursApp v1.6
+# 上班总时间 WorkHoursApp v1.7
 
 一个简单的离线 Android 工时统计 App。
+
+## Android 支持范围
+- 最低支持 Android 12（API 31）。
+- 目标支持 Android 17（API 37）。
+- compileSdk = 37，targetSdk = 37，minSdk = 31。
+- 主要适配 Android 12、13、14、15、16、17。
 
 ## 默认自动计入工时
 - 不需要每天手动设置。
@@ -39,6 +45,3 @@
 - 默认每天 8 小时，可自行修改。
 - 自动按日期计算本月截至今天的工时。
 - 所有数据保存在本机 SharedPreferences，不需要网络权限。
-
-## 最低系统
-Android 8.0 (API 26)
