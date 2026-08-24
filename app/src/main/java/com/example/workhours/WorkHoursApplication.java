@@ -7,13 +7,13 @@ import android.app.Application;
 import android.app.DatePickerDialog;
 import android.app.SearchEvent;
 import android.content.Intent;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.Spannable;
 import android.text.SpannableString;
 import android.text.TextWatcher;
-import android.text.style.BackgroundColorSpan;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StyleSpan;
 import android.view.GestureDetector;
@@ -50,29 +50,13 @@ public class WorkHoursApplication extends Application {
     private static final int TAG_WEEK_SELECTOR = 0x7f0a0002;
     private static final int TAG_COLOR_FORMATTER = 0x7f0a0003;
 
-    private static final int WORK_COLOR = 0xFF137333;
-    private static final int WORK_BG = 0xFFE6F4EA;
-    private static final int LEAVE_COLOR = 0xFF185ABC;
-    private static final int LEAVE_BG = 0xFFE8F0FE;
-    private static final int HOLIDAY_COLOR = 0xFFC26401;
-    private static final int HOLIDAY_BG = 0xFFFEF7E0;
-    private static final int REST_COLOR = 0xFF5F6368;
-    private static final int REST_BG = 0xFFF1F3F4;
+    private static final int NORMAL_COLOR = 0xFF202124;
+    private static final int ALERT_COLOR = 0xFFC5221F;
     private static final int OVERTIME_COLOR = 0xFF7B1FA2;
-    private static final int WAGE_COLOR = 0xFF137333;
-    private static final int DEDUCT_COLOR = 0xFFC5221F;
-    private static final int HOURS_COLOR = 0xFF185ABC;
 
-    private static final Pattern[] COLOR_PATTERNS = new Pattern[]{
-            Pattern.compile("工作(?:\\s*[:：]?\\s*\\d+天)?"),
-            Pattern.compile("请假(?:\\s*[:：]?\\s*\\d+天)?"),
-            Pattern.compile("公共假日(?:\\s*[:：]?\\s*\\d+天)?"),
-            Pattern.compile("休息(?:\\s*[:：]?\\s*\\d+天)?"),
-            Pattern.compile("加班(?:\\s*[:：]?\\s*[^\\n·）)]*)?"),
-            Pattern.compile("(?:本周|本月|当天|总)?工资(?:\\s*[:：]?\\s*£?[0-9.,]+)?"),
-            Pattern.compile("(?:已扣|扣工资)(?:\\s*[:：]?\\s*-?£?[0-9.,]+|\\s*[:：]?\\s*\\d+天)?"),
-            Pattern.compile("(?:本周|本月|当天|总)?工时(?:\\s*[:：]?\\s*[^\\n·）)]*)?")
-    };
+    private static final Pattern LEAVE_PATTERN = Pattern.compile("请假(?:\\s*[:：]?\\s*\\d+天)?");
+    private static final Pattern DEDUCT_PATTERN = Pattern.compile("(?:已扣|扣工资)(?:\\s*[:：]?\\s*-?£?[0-9.,]+|\\s*[:：]?\\s*\\d+天)?");
+    private static final Pattern OVERTIME_PATTERN = Pattern.compile("加班(?:\\s*[:：]?\\s*[^\\n·）)]*)?");
 
     @Override
     public void onCreate() {
@@ -115,11 +99,10 @@ public class WorkHoursApplication extends Application {
         if (activity instanceof MainActivity) {
             installColorFormatter(activity, "weekSummaryText");
             installColorFormatter(activity, "rangeSummaryText");
-            installColorFormatter(activity, "totalHoursText");
-            styleFixedStat(activity, "workDaysText", WORK_COLOR, WORK_BG);
-            styleFixedStat(activity, "leaveDaysText", LEAVE_COLOR, LEAVE_BG);
-            styleFixedStat(activity, "holidayDaysText", HOLIDAY_COLOR, HOLIDAY_BG);
-            styleFixedStat(activity, "restDaysText", REST_COLOR, REST_BG);
+            resetFixedStat(activity, "workDaysText", false);
+            resetFixedStat(activity, "leaveDaysText", true);
+            resetFixedStat(activity, "holidayDaysText", false);
+            resetFixedStat(activity, "restDaysText", false);
         } else if (activity instanceof WageActivity) {
             installColorFormatter(activity, "weekSummary");
             installColorFormatter(activity, "monthSummary");
@@ -127,15 +110,13 @@ public class WorkHoursApplication extends Application {
         }
     }
 
-    private void styleFixedStat(Activity activity, String fieldName, int textColor, int backgroundColor) {
+    private void resetFixedStat(Activity activity, String fieldName, boolean alert) {
         try {
             TextView view = (TextView) getFieldValue(activity, fieldName);
             if (view == null) return;
-            view.setTextColor(textColor);
-            view.setBackgroundColor(backgroundColor);
-            int horizontal = dp(activity, 8);
-            int vertical = dp(activity, 5);
-            view.setPadding(horizontal, vertical, horizontal, vertical);
+            view.setTextColor(alert ? ALERT_COLOR : NORMAL_COLOR);
+            view.setBackgroundColor(Color.TRANSPARENT);
+            view.setPadding(dp(activity, 4), dp(activity, 2), dp(activity, 4), dp(activity, 2));
         } catch (Exception ignored) { }
     }
 
@@ -164,27 +145,17 @@ public class WorkHoursApplication extends Application {
 
     private SpannableString colorizeSummary(String text) {
         SpannableString span = new SpannableString(text == null ? "" : text);
-        applyPattern(span, COLOR_PATTERNS[0], WORK_COLOR, WORK_BG);
-        applyPattern(span, COLOR_PATTERNS[1], LEAVE_COLOR, LEAVE_BG);
-        applyPattern(span, COLOR_PATTERNS[2], HOLIDAY_COLOR, HOLIDAY_BG);
-        applyPattern(span, COLOR_PATTERNS[3], REST_COLOR, REST_BG);
-        applyPattern(span, COLOR_PATTERNS[4], OVERTIME_COLOR, 0);
-        applyPattern(span, COLOR_PATTERNS[5], WAGE_COLOR, 0);
-        applyPattern(span, COLOR_PATTERNS[6], DEDUCT_COLOR, 0);
-        applyPattern(span, COLOR_PATTERNS[7], HOURS_COLOR, 0);
+        applyPattern(span, LEAVE_PATTERN, ALERT_COLOR);
+        applyPattern(span, DEDUCT_PATTERN, ALERT_COLOR);
+        applyPattern(span, OVERTIME_PATTERN, OVERTIME_COLOR);
         return span;
     }
 
-    private void applyPattern(SpannableString span, Pattern pattern, int textColor, int backgroundColor) {
+    private void applyPattern(SpannableString span, Pattern pattern, int color) {
         Matcher matcher = pattern.matcher(span.toString());
         while (matcher.find()) {
-            int start = matcher.start();
-            int end = matcher.end();
-            span.setSpan(new ForegroundColorSpan(textColor), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            span.setSpan(new StyleSpan(Typeface.BOLD), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            if (backgroundColor != 0) {
-                span.setSpan(new BackgroundColorSpan(backgroundColor), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
-            }
+            span.setSpan(new ForegroundColorSpan(color), matcher.start(), matcher.end(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+            span.setSpan(new StyleSpan(Typeface.BOLD), matcher.start(), matcher.end(), Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
         }
     }
 
@@ -337,7 +308,6 @@ public class WorkHoursApplication extends Application {
 
     private void installPageSwipe(Activity activity) {
         if (!(activity instanceof MainActivity) && !(activity instanceof WageActivity)) return;
-
         Window window = activity.getWindow();
         Window.Callback original = window.getCallback();
         if (original instanceof SwipeWindowCallback) return;
@@ -357,10 +327,7 @@ public class WorkHoursApplication extends Application {
                 private static final int MIN_DISTANCE = 120;
                 private static final int MIN_VELOCITY = 180;
 
-                @Override
-                public boolean onDown(MotionEvent e) {
-                    return true;
-                }
+                @Override public boolean onDown(MotionEvent e) { return true; }
 
                 @Override
                 public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
@@ -369,9 +336,7 @@ public class WorkHoursApplication extends Application {
                     float dy = e2.getY() - e1.getY();
                     if (Math.abs(dx) < MIN_DISTANCE
                             || Math.abs(dx) <= Math.abs(dy) * 1.25f
-                            || Math.abs(velocityX) < MIN_VELOCITY) {
-                        return false;
-                    }
+                            || Math.abs(velocityX) < MIN_VELOCITY) return false;
 
                     if (dx < 0 && activity instanceof MainActivity) {
                         switching = true;
@@ -379,7 +344,6 @@ public class WorkHoursApplication extends Application {
                         activity.overridePendingTransition(android.R.anim.slide_in_left, android.R.anim.fade_out);
                         return true;
                     }
-
                     if (dx > 0 && activity instanceof WageActivity) {
                         switching = true;
                         activity.finish();
@@ -391,13 +355,7 @@ public class WorkHoursApplication extends Application {
             });
         }
 
-        @Override
-        public boolean dispatchTouchEvent(MotionEvent event) {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) switching = false;
-            detector.onTouchEvent(event);
-            return delegate.dispatchTouchEvent(event);
-        }
-
+        @Override public boolean dispatchTouchEvent(MotionEvent event) { if (event.getActionMasked() == MotionEvent.ACTION_DOWN) switching = false; detector.onTouchEvent(event); return delegate.dispatchTouchEvent(event); }
         @Override public boolean dispatchKeyEvent(KeyEvent event) { return delegate.dispatchKeyEvent(event); }
         @Override public boolean dispatchKeyShortcutEvent(KeyEvent event) { return delegate.dispatchKeyShortcutEvent(event); }
         @Override public boolean dispatchTrackballEvent(MotionEvent event) { return delegate.dispatchTrackballEvent(event); }
