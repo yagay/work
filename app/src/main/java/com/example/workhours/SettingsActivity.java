@@ -106,7 +106,7 @@ public class SettingsActivity extends Activity {
         dateRow.addView(workStartDateButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
         Button clearDate = new Button(this);
         clearDate.setText("清除");
-        clearDate.setOnClickListener(v -> { workStartDate = null; updateWorkStartDateButton(); });
+        clearDate.setOnClickListener(v -> confirmClearWorkStartDate());
         LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(dp(86), dp(50));
         clearParams.leftMargin = dp(8);
         dateRow.addView(clearDate, clearParams);
@@ -195,6 +195,23 @@ public class SettingsActivity extends Activity {
         root.addView(warning);
 
         return scroll;
+    }
+
+    private void confirmClearWorkStartDate() {
+        if (workStartDate == null) {
+            Toast.makeText(this, "当前没有设置工作开始日期", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("确认清除工作开始日期？")
+                .setMessage("清除后，App 将恢复统计全部历史日期。现有历史记录不会被删除。")
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确认清除", (dialog, which) -> {
+                    workStartDate = null;
+                    updateWorkStartDateButton();
+                    Toast.makeText(this, "工作开始日期已清除，点击保存设置后生效", Toast.LENGTH_SHORT).show();
+                })
+                .show();
     }
 
     private void exportBackup() {
@@ -323,7 +340,6 @@ public class SettingsActivity extends Activity {
             throw new JSONException("缺少数据内容");
         }
 
-        // Parse every item before allowing the destructive overwrite.
         JSONObject data = backup.getJSONObject("data");
         java.util.Iterator<String> keys = data.keys();
         while (keys.hasNext()) {
