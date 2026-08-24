@@ -6,6 +6,15 @@
         android:label="上班总时间"
         android:theme="@style/AppTheme">
         <activity
+            android:name=".WageActivity"
+            android:exported="true"
+            android:label="工资统计">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
             android:name=".SettingsActivity"
             android:exported="false" />
         <activity
