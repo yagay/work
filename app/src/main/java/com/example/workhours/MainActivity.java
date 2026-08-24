@@ -29,6 +29,7 @@ public class MainActivity extends Activity {
     private static final String PREFS = "work_hours_prefs";
     private static final String OVERRIDE_PREFIX = "hours_";
     private static final String LEAVE_PREFIX = "leave_";
+    private static final String LEAVE_NOTE_PREFIX = "leave_note_";
 
     private final CheckBox[] dayChecks = new CheckBox[7];
     private EditText hoursInput;
@@ -112,7 +113,7 @@ public class MainActivity extends Activity {
         recordsTitle.setPadding(0, dp(28), 0, dp(8));
         root.addView(recordsTitle);
 
-        TextView recordsHint = text("点击某一天可修改工时或选择请假；请假固定为 0 小时", 13, false);
+        TextView recordsHint = text("点击某一天可修改工时或选择请假；请假可以填写原因", 13, false);
         recordsHint.setPadding(0, 0, 0, dp(8));
         root.addView(recordsHint);
 
@@ -214,9 +215,7 @@ public class MainActivity extends Activity {
         for (LocalDate d = first; !d.isAfter(today); d = d.plusDays(1)) {
             boolean workDay = isConfiguredWorkDay(d) && !isBankHoliday(d);
             if (workDay) automaticWorkDays++;
-            if (!isLeave(d)) {
-                total += getHoursForDate(d, dailyHours, workDay);
-            }
+            if (!isLeave(d)) total += getHoursForDate(d, dailyHours, workDay);
         }
 
         DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE", Locale.CHINA);
@@ -257,7 +256,8 @@ public class MainActivity extends Activity {
             if (bankHoliday) {
                 status = "公共假期 · 0 小时";
             } else if (leave) {
-                status = "请假 · 0 小时";
+                String note = getLeaveNote(date);
+                status = "请假" + (note.isEmpty() ? "" : " · " + note) + " · 0 小时";
             } else if (hasOverride) {
                 status = trimNumber(hours) + " 小时 · 已修改";
             } else if (configuredWorkDay) {
@@ -302,6 +302,20 @@ public class MainActivity extends Activity {
         leaveCheck.setChecked(isLeave(date));
         box.addView(leaveCheck);
 
+        TextView reasonLabel = text("请假原因 / 描述（可选）", 14, false);
+        reasonLabel.setPadding(0, dp(8), 0, 0);
+        box.addView(reasonLabel);
+
+        EditText reasonInput = new EditText(this);
+        reasonInput.setSingleLine(false);
+        reasonInput.setMinLines(2);
+        reasonInput.setMaxLines(4);
+        reasonInput.setHint("例如：看医生、年假、家庭原因");
+        reasonInput.setText(getLeaveNote(date));
+        reasonInput.setEnabled(leaveCheck.isChecked());
+        box.addView(reasonInput, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
         TextView label = text("当天工时（0～24）", 14, false);
         label.setPadding(0, dp(10), 0, 0);
         box.addView(label);
@@ -317,6 +331,7 @@ public class MainActivity extends Activity {
 
         leaveCheck.setOnCheckedChangeListener((buttonView, checked) -> {
             input.setEnabled(!checked);
+            reasonInput.setEnabled(checked);
             if (checked) input.setText("0");
             else input.setText(trimNumber(currentHours));
         });
@@ -334,7 +349,10 @@ public class MainActivity extends Activity {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
                 SharedPreferences.Editor editor = prefs.edit();
                 if (leaveCheck.isChecked()) {
+                    String reason = reasonInput.getText().toString().trim();
                     editor.putBoolean(leaveKey(date), true);
+                    if (reason.isEmpty()) editor.remove(leaveNoteKey(date));
+                    else editor.putString(leaveNoteKey(date), reason);
                     editor.remove(overrideKey(date));
                     editor.apply();
                     dialog.dismiss();
@@ -355,6 +373,7 @@ public class MainActivity extends Activity {
                     return;
                 }
                 editor.remove(leaveKey(date));
+                editor.remove(leaveNoteKey(date));
                 editor.putFloat(overrideKey(date), value);
                 editor.apply();
                 dialog.dismiss();
@@ -363,7 +382,7 @@ public class MainActivity extends Activity {
             });
 
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
-                prefs.edit().remove(overrideKey(date)).remove(leaveKey(date)).apply();
+                prefs.edit().remove(overrideKey(date)).remove(leaveKey(date)).remove(leaveNoteKey(date)).apply();
                 dialog.dismiss();
                 updateSummary();
                 Toast.makeText(this, "已恢复自动计算", Toast.LENGTH_SHORT).show();
@@ -387,7 +406,8 @@ public class MainActivity extends Activity {
             }
         }
         if (!found) {
-            holidaysContainer.addView(text("本月无公共假期", 13, false));
+            TextView none = text("本月无公共假期", 13, false);
+            holidaysContainer.addView(none);
         }
     }
 
@@ -400,14 +420,14 @@ public class MainActivity extends Activity {
             LocalDate date = month.atDay(day);
             if (isLeave(date) && !isBankHoliday(date)) {
                 found = true;
-                TextView line = text(date.format(fmt) + " · 请假 · 0 小时", 13, true);
+                String note = getLeaveNote(date);
+                String value = date.format(fmt) + " · 请假" + (note.isEmpty() ? "" : " · " + note) + " · 0 小时";
+                TextView line = text(value, 13, true);
                 line.setPadding(0, dp(3), 0, dp(3));
                 leaveContainer.addView(line);
             }
         }
-        if (!found) {
-            leaveContainer.addView(text("本月无请假记录", 13, false));
-        }
+        if (!found) leaveContainer.addView(text("本月无请假记录", 13, false));
     }
 
     private boolean isBankHoliday(LocalDate date) {
@@ -501,12 +521,20 @@ public class MainActivity extends Activity {
         return prefs.getBoolean(leaveKey(date), false);
     }
 
+    private String getLeaveNote(LocalDate date) {
+        return prefs.getString(leaveNoteKey(date), "");
+    }
+
     private String overrideKey(LocalDate date) {
         return OVERRIDE_PREFIX + date;
     }
 
     private String leaveKey(LocalDate date) {
         return LEAVE_PREFIX + date;
+    }
+
+    private String leaveNoteKey(LocalDate date) {
+        return LEAVE_NOTE_PREFIX + date;
     }
 
     private int dayIndex(DayOfWeek day) {
