@@ -10,7 +10,7 @@ android {
         applicationId = "com.example.workhours"
         minSdk = 31
         targetSdk = 37
-        versionCode = 27
-        versionName = "1.27"
+        versionCode = 28
+        versionName = "1.28"
     }
 }
