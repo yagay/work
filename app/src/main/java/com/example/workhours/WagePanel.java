@@ -19,6 +19,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -40,6 +43,7 @@ public class WagePanel extends LinearLayout {
     private static final String WAGE_MODE_KEY = "wage_mode";
     private static final String HOURLY_RATE_KEY = "hourly_rate";
     private static final String MONTHLY_SALARY_KEY = "monthly_salary";
+    private static final String WAGE_HISTORY_KEY = "wage_history";
     private static final String WAGE_DEDUCT_PREFIX = "wage_deduct_";
     private static final String OVERRIDE_PREFIX = "hours_";
     private static final String LEAVE_PREFIX = "leave_";
@@ -484,15 +488,49 @@ public class WagePanel extends LinearLayout {
     private float getWageBeforeDeduction(LocalDate date) {
         LocalDate ws = getWorkStartDate();
         if (date.isAfter(LocalDate.now()) || (ws != null && date.isBefore(ws))) return 0f;
-        if (!isMonthlyMode()) return getHours(date) * prefs.getFloat(HOURLY_RATE_KEY, 0f);
+        WageRule rule = getWageRuleForDate(date);
+        if (rule == null) return 0f;
+        if (!"monthly".equals(rule.mode)) return getHours(date) * rule.amount;
         if (!isPlannedPaidDay(date)) return 0f;
-        float monthly = prefs.getFloat(MONTHLY_SALARY_KEY, 0f);
         int planned = getPlannedPaidDays(YearMonth.from(date));
-        return planned <= 0 ? 0f : monthly / planned;
+        return planned <= 0 ? 0f : rule.amount / planned;
     }
 
     private boolean isMonthlyMode() {
-        return "monthly".equals(prefs.getString(WAGE_MODE_KEY, "hourly"));
+        WageRule rule = getWageRuleForDate(LocalDate.now());
+        return rule != null && "monthly".equals(rule.mode);
+    }
+
+    private WageRule getWageRuleForDate(LocalDate date) {
+        String raw = prefs.getString(WAGE_HISTORY_KEY, "");
+        if (raw != null && !raw.trim().isEmpty()) {
+            try {
+                JSONArray arr = new JSONArray(raw);
+                LocalDate bestDate = null;
+                WageRule best = null;
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject item = arr.optJSONObject(i);
+                    if (item == null) continue;
+                    LocalDate effective;
+                    try { effective = LocalDate.parse(item.optString("effectiveDate", "")); }
+                    catch (Exception ignored) { continue; }
+                    if (effective.isAfter(date)) continue;
+                    if (bestDate == null || effective.isAfter(bestDate)) {
+                        bestDate = effective;
+                        best = new WageRule(item.optString("mode", "hourly"), (float)item.optDouble("amount", 0d));
+                    }
+                }
+                if (best != null) return best;
+            } catch (Exception ignored) { }
+        }
+        String mode = prefs.getString(WAGE_MODE_KEY, "hourly");
+        float amount = "monthly".equals(mode) ? prefs.getFloat(MONTHLY_SALARY_KEY, 0f) : prefs.getFloat(HOURLY_RATE_KEY, 0f);
+        return amount <= 0f ? null : new WageRule(mode, amount);
+    }
+
+    private static class WageRule {
+        final String mode; final float amount;
+        WageRule(String mode, float amount) { this.mode = mode; this.amount = amount; }
     }
 
     private int getPlannedPaidDays(YearMonth month) {
