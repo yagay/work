@@ -1,0 +1,45 @@
+from pathlib import Path
+
+# UiStyle: make palette runtime-switchable.
+p=Path('app/src/main/java/com/example/workhours/UiStyle.java')
+s=p.read_text()
+s=s.replace('''    static final int PAGE_BG = 0xFFF5F7FB;\n    static final int CARD_BG = 0xFFFFFFFF;\n    static final int PRIMARY = 0xFF3157D5;\n    static final int PRIMARY_SOFT = 0xFFEAF0FF;\n    static final int TEXT = 0xFF172033;\n    static final int TEXT_MUTED = 0xFF6B7280;\n    static final int BORDER = 0xFFE2E7F0;\n    static final int DANGER = 0xFFC5221F;''','''    static int PAGE_BG = 0xFFF5F7FB;\n    static int CARD_BG = 0xFFFFFFFF;\n    static int PRIMARY = 0xFF3157D5;\n    static int PRIMARY_SOFT = 0xFFEAF0FF;\n    static int TEXT = 0xFF172033;\n    static int TEXT_MUTED = 0xFF6B7280;\n    static int BORDER = 0xFFE2E7F0;\n    static int DANGER = 0xFFC5221F;\n    static int INPUT_BG = 0xFFF9FAFC;\n    static int HINT = 0xFF9AA3B2;''',1)
+s=s.replace('''    private UiStyle() { }\n''','''    private UiStyle() { }\n\n    static void applyDark(boolean dark) {\n        if (dark) {\n            PAGE_BG = 0xFF0F141C;\n            CARD_BG = 0xFF171E29;\n            PRIMARY = 0xFF6F8FFF;\n            PRIMARY_SOFT = 0xFF202A44;\n            TEXT = 0xFFF1F5FF;\n            TEXT_MUTED = 0xFF9DA8BA;\n            BORDER = 0xFF2C3545;\n            DANGER = 0xFFFF7A76;\n            INPUT_BG = 0xFF121925;\n            HINT = 0xFF778297;\n        } else {\n            PAGE_BG = 0xFFF5F7FB;\n            CARD_BG = 0xFFFFFFFF;\n            PRIMARY = 0xFF3157D5;\n            PRIMARY_SOFT = 0xFFEAF0FF;\n            TEXT = 0xFF172033;\n            TEXT_MUTED = 0xFF6B7280;\n            BORDER = 0xFFE2E7F0;\n            DANGER = 0xFFC5221F;\n            INPUT_BG = 0xFFF9FAFC;\n            HINT = 0xFF9AA3B2;\n        }\n    }\n''',1)
+s=s.replace('''        view.setHintTextColor(0xFF9AA3B2);\n        view.setBackground(roundRect(context, 0xFFF9FAFC, 14, BORDER, 1));''','''        view.setHintTextColor(HINT);\n        view.setBackground(roundRect(context, INPUT_BG, 14, BORDER, 1));''',1)
+p.write_text(s)
+
+# Theme manager.
+p=Path('app/src/main/java/com/example/workhours/AppThemeManager.java')
+p.write_text('''package com.example.workhours;\n\nimport android.app.Activity;\nimport android.content.Context;\nimport android.content.SharedPreferences;\nimport android.content.res.Configuration;\nimport android.graphics.Color;\nimport android.view.Window;\nimport android.view.WindowInsetsController;\n\nfinal class AppThemeManager {\n    static final String KEY = "app_theme";\n    static final String SYSTEM = "system";\n    static final String LIGHT = "light";\n    static final String DARK = "dark";\n    private static final String PREFS = "work_hours_prefs";\n\n    private AppThemeManager() { }\n\n    static String mode(Context context) {\n        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, SYSTEM);\n    }\n\n    static void setMode(Context context, String mode) {\n        String safe = DARK.equals(mode) ? DARK : LIGHT.equals(mode) ? LIGHT : SYSTEM;\n        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, safe).apply();\n    }\n\n    static boolean isDark(Context context) {\n        String mode = mode(context);\n        if (DARK.equals(mode)) return true;\n        if (LIGHT.equals(mode)) return false;\n        int night = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;\n        return night == Configuration.UI_MODE_NIGHT_YES;\n    }\n\n    static boolean apply(Activity activity) {\n        boolean dark = isDark(activity);\n        UiStyle.applyDark(dark);\n        Window window = activity.getWindow();\n        window.setStatusBarColor(UiStyle.PAGE_BG);\n        window.setNavigationBarColor(UiStyle.PAGE_BG);\n        WindowInsetsController controller = window.getInsetsController();\n        if (controller != null) {\n            int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS\n                    | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;\n            controller.setSystemBarsAppearance(dark ? 0 : mask, mask);\n        }\n        return dark;\n    }\n\n    static String label(String mode) {\n        if (DARK.equals(mode)) return "深色";\n        if (LIGHT.equals(mode)) return "浅色";\n        return "跟随系统";\n    }\n}\n''')
+
+# MainActivity apply theme and rebuild when changed.
+p=Path('app/src/main/java/com/example/workhours/MainActivity.java')
+s=p.read_text()
+s=s.replace('''    private boolean showingWageStats = false;''','''    private boolean showingWageStats = false;\n    private boolean appliedDarkTheme;''',1)
+s=s.replace('''        super.onCreate(savedInstanceState);\n        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);''','''        super.onCreate(savedInstanceState);\n        appliedDarkTheme = AppThemeManager.apply(this);\n        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);''',1)
+s=s.replace('''        super.onResume();\n        if (monthTitle == null) return;''','''        super.onResume();\n        if (appliedDarkTheme != AppThemeManager.isDark(this)) { recreate(); return; }\n        if (monthTitle == null) return;''',1)
+p.write_text(s)
+
+# SettingsActivity: apply theme and add selector section.
+p=Path('app/src/main/java/com/example/workhours/SettingsActivity.java')
+s=p.read_text()
+s=s.replace('''    private LinearLayout wageHistoryContainer;''','''    private LinearLayout wageHistoryContainer;\n    private Button themeSystemButton;\n    private Button themeLightButton;\n    private Button themeDarkButton;\n    private boolean appliedDarkTheme;''',1)
+s=s.replace('''        super.onCreate(savedInstanceState);\n        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);''','''        super.onCreate(savedInstanceState);\n        appliedDarkTheme = AppThemeManager.apply(this);\n        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);''',1)
+s=s.replace('''        super.onResume();\n        if (prefs != null && prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)) {''','''        super.onResume();\n        if (appliedDarkTheme != AppThemeManager.isDark(this)) { recreate(); return; }\n        if (prefs != null && prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)) {''',1)
+anchor='''        LinearLayout basicSection = createCollapsibleSection(root, "基本工作设置", true);'''
+ui='''        LinearLayout appearanceSection = createCollapsibleSection(root, "外观主题", false);\n        TextView appearanceInfo = text("选择 App 的显示主题。跟随系统会自动使用手机当前的浅色或深色模式。", 13, false);\n        appearanceInfo.setPadding(0, 0, 0, dp(8));\n        appearanceSection.addView(appearanceInfo);\n        LinearLayout themeRow = new LinearLayout(this);\n        themeRow.setOrientation(LinearLayout.HORIZONTAL);\n        appearanceSection.addView(themeRow);\n        themeSystemButton = new Button(this); themeSystemButton.setText("跟随系统");\n        themeLightButton = new Button(this); themeLightButton.setText("浅色");\n        themeDarkButton = new Button(this); themeDarkButton.setText("深色");\n        themeSystemButton.setOnClickListener(v -> setAppTheme(AppThemeManager.SYSTEM));\n        themeLightButton.setOnClickListener(v -> setAppTheme(AppThemeManager.LIGHT));\n        themeDarkButton.setOnClickListener(v -> setAppTheme(AppThemeManager.DARK));\n        themeRow.addView(themeSystemButton, new LinearLayout.LayoutParams(0, dp(46), 1f));\n        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, dp(46), 1f); tlp.leftMargin=dp(6); themeRow.addView(themeLightButton, tlp);\n        LinearLayout.LayoutParams tdp = new LinearLayout.LayoutParams(0, dp(46), 1f); tdp.leftMargin=dp(6); themeRow.addView(themeDarkButton, tdp);\n        refreshThemeButtons();\n\n'''
+if anchor not in s: raise SystemExit('basic section anchor missing')
+s=s.replace(anchor,ui+anchor,1)
+helper_anchor='''    private LinearLayout createCollapsibleSection(LinearLayout root, String title, boolean expanded) {'''
+helpers='''    private void setAppTheme(String mode) {\n        if (mode.equals(AppThemeManager.mode(this))) return;\n        AppThemeManager.setMode(this, mode);\n        recreate();\n    }\n\n    private void refreshThemeButtons() {\n        if (themeSystemButton == null) return;\n        String mode = AppThemeManager.mode(this);\n        paintThemeButton(themeSystemButton, AppThemeManager.SYSTEM.equals(mode));\n        paintThemeButton(themeLightButton, AppThemeManager.LIGHT.equals(mode));\n        paintThemeButton(themeDarkButton, AppThemeManager.DARK.equals(mode));\n    }\n\n    private void paintThemeButton(Button button, boolean selected) {\n        UiStyle.button(this, button, selected);\n    }\n\n'''
+if helper_anchor not in s: raise SystemExit('collapsible helper anchor missing')
+s=s.replace(helper_anchor,helpers+helper_anchor,1)
+p.write_text(s)
+
+# Legacy wage page theme consistency.
+p=Path('app/src/main/java/com/example/workhours/WageActivity.java')
+s=p.read_text()
+needle='''        super.onCreate(savedInstanceState);'''
+if needle in s:
+    s=s.replace(needle,needle+'\n        AppThemeManager.apply(this);',1)
+p.write_text(s)
