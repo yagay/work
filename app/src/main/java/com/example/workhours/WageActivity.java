@@ -53,6 +53,8 @@ public class WageActivity extends Activity {
     private RadioButton monthlyMode;
     private EditText hourlyRateInput;
     private EditText monthlySalaryInput;
+    private LinearLayout hourlySettingsGroup;
+    private LinearLayout monthlySettingsGroup;
     private TextView monthTitle;
     private TextView monthSummary;
     private LinearLayout monthDetails;
@@ -121,19 +123,24 @@ public class WageActivity extends Activity {
         modes.addView(monthlyMode, new RadioGroup.LayoutParams(0, -2, 1f));
         root.addView(modes);
 
-        root.addView(text("每小时工资（£）", 14, true));
+        hourlySettingsGroup = vertical();
+        hourlySettingsGroup.addView(text("每小时工资（£）", 14, true));
         hourlyRateInput = decimalInput("例如：12.50");
-        root.addView(hourlyRateInput);
+        hourlySettingsGroup.addView(hourlyRateInput);
+        root.addView(hourlySettingsGroup);
 
+        monthlySettingsGroup = vertical();
         TextView monthlyLabel = text("每月固定工资（£）", 14, true);
-        monthlyLabel.setPadding(0, dp(10), 0, 0);
-        root.addView(monthlyLabel);
+        monthlySettingsGroup.addView(monthlyLabel);
         monthlySalaryInput = decimalInput("例如：2200");
-        root.addView(monthlySalaryInput);
+        monthlySettingsGroup.addView(monthlySalaryInput);
 
         TextView rule = text("月薪模式：月薪按当月计划上班日平均分摊。公共假日和请假默认保留工资；只有明确标记“扣工资”的日期才扣除当天份额。", 13, false);
         rule.setPadding(0, dp(8), 0, dp(8));
-        root.addView(rule);
+        monthlySettingsGroup.addView(rule);
+        root.addView(monthlySettingsGroup);
+
+        modes.setOnCheckedChangeListener((group, checkedId) -> updateWageModeVisibility());
 
         Button save = button("保存工资设置");
         save.setOnClickListener(v -> saveWageSettings());
@@ -224,6 +231,17 @@ public class WageActivity extends Activity {
         monthlyMode.setChecked("monthly".equals(mode));
         hourlyRateInput.setText(trimMoney(prefs.getFloat(HOURLY_RATE_KEY, 0f)));
         monthlySalaryInput.setText(trimMoney(prefs.getFloat(MONTHLY_SALARY_KEY, 0f)));
+        updateWageModeVisibility();
+    }
+
+    private void updateWageModeVisibility() {
+        boolean monthly = monthlyMode != null && monthlyMode.isChecked();
+        if (hourlySettingsGroup != null) {
+            hourlySettingsGroup.setVisibility(monthly ? View.GONE : View.VISIBLE);
+        }
+        if (monthlySettingsGroup != null) {
+            monthlySettingsGroup.setVisibility(monthly ? View.VISIBLE : View.GONE);
+        }
     }
 
     private void saveWageSettings() {
