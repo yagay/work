@@ -73,10 +73,12 @@ public class MainActivity extends Activity {
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
     private Button rangeStartButton, rangeEndButton;
     private boolean showingWageStats = false;
+    private boolean appliedDarkTheme;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        appliedDarkTheme = AppThemeManager.apply(this);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         LocalDate today = LocalDate.now();
         displayedMonth = YearMonth.now();
@@ -92,6 +94,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (appliedDarkTheme != AppThemeManager.isDark(this)) { recreate(); return; }
         if (monthTitle == null) return;
         LocalDate ws = getWorkStartDate();
         if (ws != null) {

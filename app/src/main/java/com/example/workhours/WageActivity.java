@@ -77,6 +77,7 @@ public class WageActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        AppThemeManager.apply(this);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         LocalDate today = LocalDate.now();
         displayedMonth = YearMonth.from(today);

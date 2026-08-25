@@ -88,11 +88,16 @@ public class SettingsActivity extends Activity {
     private LocalDate workStartDate;
     private TextView currentWageText;
     private LinearLayout wageHistoryContainer;
+    private Button themeSystemButton;
+    private Button themeLightButton;
+    private Button themeDarkButton;
+    private boolean appliedDarkTheme;
     private final Button[] restDayButtons = new Button[7];
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        appliedDarkTheme = AppThemeManager.apply(this);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         setContentView(buildUi());
         loadSettings();
@@ -101,6 +106,7 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (appliedDarkTheme != AppThemeManager.isDark(this)) { recreate(); return; }
         if (prefs != null && prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)) {
             WorkAlarmManager.sync(this);
         }
@@ -132,6 +138,24 @@ public class SettingsActivity extends Activity {
         TextView info = text("设置一次后，App 会按工作时间和休息规则自动计算。", 14, false);
         info.setPadding(0, dp(18), 0, dp(18));
         root.addView(info);
+
+        LinearLayout appearanceSection = createCollapsibleSection(root, "外观主题", false);
+        TextView appearanceInfo = text("选择 App 的显示主题。跟随系统会自动使用手机当前的浅色或深色模式。", 13, false);
+        appearanceInfo.setPadding(0, 0, 0, dp(8));
+        appearanceSection.addView(appearanceInfo);
+        LinearLayout themeRow = new LinearLayout(this);
+        themeRow.setOrientation(LinearLayout.HORIZONTAL);
+        appearanceSection.addView(themeRow);
+        themeSystemButton = new Button(this); themeSystemButton.setText("跟随系统");
+        themeLightButton = new Button(this); themeLightButton.setText("浅色");
+        themeDarkButton = new Button(this); themeDarkButton.setText("深色");
+        themeSystemButton.setOnClickListener(v -> setAppTheme(AppThemeManager.SYSTEM));
+        themeLightButton.setOnClickListener(v -> setAppTheme(AppThemeManager.LIGHT));
+        themeDarkButton.setOnClickListener(v -> setAppTheme(AppThemeManager.DARK));
+        themeRow.addView(themeSystemButton, new LinearLayout.LayoutParams(0, dp(46), 1f));
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, dp(46), 1f); tlp.leftMargin=dp(6); themeRow.addView(themeLightButton, tlp);
+        LinearLayout.LayoutParams tdp = new LinearLayout.LayoutParams(0, dp(46), 1f); tdp.leftMargin=dp(6); themeRow.addView(themeDarkButton, tdp);
+        refreshThemeButtons();
 
         LinearLayout basicSection = createCollapsibleSection(root, "基本工作设置", true);
         basicSection.addView(text("工作开始日期（可选）", 17, true));
@@ -824,6 +848,24 @@ public class SettingsActivity extends Activity {
                     monthlyRestInput.setText(out.toString());
                     updateMonthlyRestButton();
                 }).show();
+    }
+
+    private void setAppTheme(String mode) {
+        if (mode.equals(AppThemeManager.mode(this))) return;
+        AppThemeManager.setMode(this, mode);
+        recreate();
+    }
+
+    private void refreshThemeButtons() {
+        if (themeSystemButton == null) return;
+        String mode = AppThemeManager.mode(this);
+        paintThemeButton(themeSystemButton, AppThemeManager.SYSTEM.equals(mode));
+        paintThemeButton(themeLightButton, AppThemeManager.LIGHT.equals(mode));
+        paintThemeButton(themeDarkButton, AppThemeManager.DARK.equals(mode));
+    }
+
+    private void paintThemeButton(Button button, boolean selected) {
+        UiStyle.button(this, button, selected);
     }
 
     private LinearLayout createCollapsibleSection(LinearLayout root, String title, boolean expanded) {
