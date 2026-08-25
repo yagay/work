@@ -209,14 +209,14 @@ public class MainActivity extends Activity {
     private void buildSharedMonthSummary(LinearLayout root) {
         LinearLayout nav = horizontal();
         nav.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, dp(58));
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, dp(76));
         np.topMargin = dp(14);
         root.addView(nav, np);
         previousMonthButton = button("‹");
         previousMonthButton.setTextSize(24);
         previousMonthButton.setOnClickListener(v -> { YearMonth target=displayedMonth.minusMonths(1); LocalDate ws=getWorkStartDate(); if(ws==null||!target.isBefore(YearMonth.from(ws))){displayedMonth=target;refreshMonth();}});
         nav.addView(previousMonthButton,new LinearLayout.LayoutParams(dp(58),dp(48)));
-        monthTitle=text("",18,true); monthTitle.setGravity(Gravity.CENTER); monthTitle.setPadding(dp(8),dp(10),dp(8),dp(10)); monthTitle.setOnClickListener(v->chooseWorkMonth());
+        monthTitle=text("",18,true); monthTitle.setGravity(Gravity.CENTER); monthTitle.setPadding(dp(8),dp(6),dp(8),dp(6)); monthTitle.setMinHeight(dp(68)); monthTitle.setOnClickListener(v->chooseWorkMonth());
         nav.addView(monthTitle,new LinearLayout.LayoutParams(0,-2,1f));
         nextMonthButton=button("›"); nextMonthButton.setTextSize(24); nextMonthButton.setOnClickListener(v->{if(displayedMonth.isBefore(YearMonth.now())){displayedMonth=displayedMonth.plusMonths(1);refreshMonth();}});
         nav.addView(nextMonthButton,new LinearLayout.LayoutParams(dp(58),dp(48)));
