@@ -180,16 +180,21 @@ public class WagePanel extends LinearLayout {
         root.addView(viewTabs, viewTabsParams);
         weekTabButton = button("星期");
         dayTabButton = button("日期");
+        monthTabButton = button("月");
         viewTabs.addView(weekTabButton, new LinearLayout.LayoutParams(0, dp(46), 1f));
         LinearLayout.LayoutParams middleTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
         middleTabParams.leftMargin = dp(6);
         viewTabs.addView(dayTabButton, middleTabParams);
+        LinearLayout.LayoutParams lastTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        lastTabParams.leftMargin = dp(6);
+        viewTabs.addView(monthTabButton, lastTabParams);
 
         weekContent = vertical();
         dayContent = vertical();
         monthContent = vertical();
         root.addView(weekContent);
         root.addView(dayContent);
+        root.addView(monthContent);
 
         TextView weekSection = text("按星期查看工资", 19, true);
         weekSection.setPadding(0, dp(18), 0, dp(8));
@@ -248,8 +253,22 @@ public class WagePanel extends LinearLayout {
         dayHint.setPadding(0, dp(10), 0, 0);
         dayCard.addView(dayHint);
 
+        TextView monthSection = text("按月查看工资详情", 19, true);
+        monthSection.setPadding(0, dp(18), 0, dp(8));
+        monthContent.addView(monthSection);
+        TextView monthHint = text("使用上方月份选择器切换月份。", 13, false);
+        monthHint.setPadding(0, 0, 0, dp(8));
+        monthContent.addView(monthHint);
+        LinearLayout monthCard = card();
+        monthContent.addView(monthCard);
+        monthSummary = text("", 16, true);
+        monthCard.addView(monthSummary);
+        monthDetails = vertical();
+        monthCard.addView(monthDetails);
+
         weekTabButton.setOnClickListener(v -> showViewTab(0));
         dayTabButton.setOnClickListener(v -> showViewTab(1));
+        monthTabButton.setOnClickListener(v -> showViewTab(2));
         showViewTab(0);
 
     }
@@ -406,12 +425,16 @@ public class WagePanel extends LinearLayout {
         if (weekContent == null || dayContent == null || monthContent == null) return;
         weekContent.setVisibility(tab == 0 ? View.VISIBLE : View.GONE);
         dayContent.setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
+        monthContent.setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
         UiStyle.button(host, weekTabButton, tab == 0);
         UiStyle.button(host, dayTabButton, tab == 1);
+        UiStyle.button(host, monthTabButton, tab == 2);
         weekTabButton.setEnabled(tab != 0);
         dayTabButton.setEnabled(tab != 1);
+        monthTabButton.setEnabled(tab != 2);
         if (tab == 0) refreshWeek();
-        else refreshDay();
+        else if (tab == 1) refreshDay();
+        else refreshMonth();
     }
 
     private void refreshDay() {
@@ -497,6 +520,7 @@ public class WagePanel extends LinearLayout {
     }
 
     private void refreshMonth() {
+        if (monthSummary == null || monthDetails == null) return;
         YearMonth now = YearMonth.now();
         if (displayedMonth.isAfter(now)) displayedMonth = now;
         LocalDate ws = getWorkStartDate();
