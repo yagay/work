@@ -17,6 +17,8 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -49,6 +51,9 @@ public class SettingsActivity extends Activity {
     private static final String BREAK_MINUTES_KEY = "break_minutes";
     private static final String WORK_START_DATE_KEY = "work_start_date";
     private static final String MONTHLY_REST_DAYS_KEY = "monthly_rest_days";
+    private static final String WAGE_MODE_KEY = "wage_mode";
+    private static final String HOURLY_RATE_KEY = "hourly_rate";
+    private static final String MONTHLY_SALARY_KEY = "monthly_salary";
     private static final int REQUEST_EXPORT = 2001;
     private static final int REQUEST_IMPORT = 2002;
     private static final int BACKUP_FORMAT_VERSION = 1;
@@ -68,6 +73,12 @@ public class SettingsActivity extends Activity {
     private LinearLayout alarmTimeGroup;
     private EditText alarmUpdateTimeInput;
     private LocalDate workStartDate;
+    private RadioButton hourlyWageMode;
+    private RadioButton monthlyWageMode;
+    private EditText hourlyRateInput;
+    private EditText monthlySalaryInput;
+    private LinearLayout hourlyWageGroup;
+    private LinearLayout monthlyWageGroup;
     private final Button[] restDayButtons = new Button[7];
 
     @Override
@@ -258,6 +269,44 @@ public class SettingsActivity extends Activity {
         monthlyRestButton.setOnClickListener(v -> showMonthlyRestPicker());
         root.addView(monthlyRestButton, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(50)));
+
+        TextView wageTitle = text("工资设置", 17, true);
+        wageTitle.setPadding(0, dp(26), 0, dp(6));
+        root.addView(wageTitle);
+        TextView wageInfo = text("设置工资计算方式。工资统计页面只负责查看，不再修改工资规则。", 13, false);
+        wageInfo.setPadding(0, 0, 0, dp(8));
+        root.addView(wageInfo);
+
+        RadioGroup wageModes = new RadioGroup(this);
+        wageModes.setOrientation(RadioGroup.HORIZONTAL);
+        hourlyWageMode = new RadioButton(this);
+        hourlyWageMode.setText("按小时工资");
+        monthlyWageMode = new RadioButton(this);
+        monthlyWageMode.setText("按月固定工资");
+        wageModes.addView(hourlyWageMode, new RadioGroup.LayoutParams(0, -2, 1f));
+        wageModes.addView(monthlyWageMode, new RadioGroup.LayoutParams(0, -2, 1f));
+        root.addView(wageModes);
+
+        hourlyWageGroup = new LinearLayout(this);
+        hourlyWageGroup.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout hourlyRow = settingInputRow("每小时工资（£）", dp(126));
+        hourlyRateInput = input("12.50", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        hourlyRow.addView(hourlyRateInput, compactInputParams(dp(126)));
+        hourlyWageGroup.addView(hourlyRow);
+        root.addView(hourlyWageGroup);
+
+        monthlyWageGroup = new LinearLayout(this);
+        monthlyWageGroup.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout monthlySalaryRow = settingInputRow("每月固定工资（£）", dp(126));
+        monthlySalaryInput = input("2200", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        monthlySalaryRow.addView(monthlySalaryInput, compactInputParams(dp(126)));
+        monthlyWageGroup.addView(monthlySalaryRow);
+        TextView monthlyRule = text("月薪按当月计划上班日平均分摊。公共假日和请假默认保留工资；只有明确标记“扣工资”的日期才扣除当天份额。", 13, false);
+        monthlyRule.setPadding(0, dp(4), 0, dp(4));
+        monthlyWageGroup.addView(monthlyRule);
+        root.addView(monthlyWageGroup);
+
+        wageModes.setOnCheckedChangeListener((group, checkedId) -> updateWageModeVisibility());
 
         Button save = new Button(this);
         UiStyle.button(this, save, true);
@@ -601,6 +650,12 @@ public class SettingsActivity extends Activity {
         alarmOptionsGroup.setVisibility(workAlarmCheck.isChecked()
                 ? android.view.View.VISIBLE : android.view.View.GONE);
         updateMonthlyRestButton();
+        String wageMode = prefs.getString(WAGE_MODE_KEY, "hourly");
+        hourlyWageMode.setChecked(!"monthly".equals(wageMode));
+        monthlyWageMode.setChecked("monthly".equals(wageMode));
+        hourlyRateInput.setText(trimMoney(prefs.getFloat(HOURLY_RATE_KEY, 0f)));
+        monthlySalaryInput.setText(trimMoney(prefs.getFloat(MONTHLY_SALARY_KEY, 0f)));
+        updateWageModeVisibility();
 
         workStartDate = null;
         String savedStartDate = prefs.getString(WORK_START_DATE_KEY, "");
@@ -616,6 +671,30 @@ public class SettingsActivity extends Activity {
             updateRestDayButtonStyle(restDayButtons[i]);
         }
         updatePreview(false);
+    }
+
+    private void updateWageModeVisibility() {
+        boolean monthly = monthlyWageMode != null && monthlyWageMode.isChecked();
+        if (hourlyWageGroup != null) hourlyWageGroup.setVisibility(monthly ? android.view.View.GONE : android.view.View.VISIBLE);
+        if (monthlyWageGroup != null) monthlyWageGroup.setVisibility(monthly ? android.view.View.VISIBLE : android.view.View.GONE);
+    }
+
+    private Float parseMoney(EditText input, String error) {
+        String raw = input.getText().toString().trim();
+        if (raw.isEmpty()) return 0f;
+        try {
+            float value = Float.parseFloat(raw);
+            if (value < 0 || value > 10000000f) throw new NumberFormatException();
+            return value;
+        } catch (NumberFormatException e) {
+            input.setError(error);
+            return null;
+        }
+    }
+
+    private String trimMoney(float value) {
+        if (Math.abs(value - Math.round(value)) < 0.0001f) return String.valueOf(Math.round(value));
+        return String.format(Locale.US, "%.2f", value).replaceAll("0+$", "").replaceAll("\\.$", "");
     }
 
     private void chooseWorkStartDate() {
@@ -657,6 +736,11 @@ public class SettingsActivity extends Activity {
         }
         if (parseTime(alarmUpdateTime) == null) alarmUpdateTime = "12:00";
 
+        boolean monthlyWage = monthlyWageMode.isChecked();
+        Float hourlyRate = parseMoney(hourlyRateInput, "请输入正确的时薪");
+        Float monthlySalary = parseMoney(monthlySalaryInput, "请输入正确的月薪");
+        if (hourlyRate == null || monthlySalary == null) return;
+
         SharedPreferences.Editor editor = prefs.edit()
                 .putString(START_TIME_KEY, start)
                 .putString(END_TIME_KEY, end)
@@ -666,7 +750,10 @@ public class SettingsActivity extends Activity {
                 .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked())
                 .putBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, followWorkTime)
                 .putString(WorkAlarmManager.ALARM_TIME_KEY, alarmTime)
-                .putString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, alarmUpdateTime);
+                .putString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, alarmUpdateTime)
+                .putString(WAGE_MODE_KEY, monthlyWage ? "monthly" : "hourly")
+                .putFloat(HOURLY_RATE_KEY, hourlyRate)
+                .putFloat(MONTHLY_SALARY_KEY, monthlySalary);
 
         if (workStartDate == null) editor.remove(WORK_START_DATE_KEY);
         else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());

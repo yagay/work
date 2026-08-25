@@ -98,7 +98,6 @@ public class WagePanel extends LinearLayout {
         rangeStartDate = mondayOf(today);
         rangeEndDate = today;
         buildUi();
-        loadSettings();
         refreshAll();
     }
 
@@ -132,47 +131,12 @@ public class WagePanel extends LinearLayout {
         LinearLayout root = this;
         root.setPadding(0, dp(8), 0, dp(28));
 
-        TextView settingsTitle = text("工资设置", 19, true);
-        settingsTitle.setPadding(0, dp(18), 0, dp(6));
-        root.addView(settingsTitle);
-
-        RadioGroup modes = new RadioGroup(host);
-        modes.setOrientation(RadioGroup.HORIZONTAL);
-        hourlyMode = new RadioButton(host);
-        hourlyMode.setText("按小时工资");
-        monthlyMode = new RadioButton(host);
-        monthlyMode.setText("按月固定工资");
-        modes.addView(hourlyMode, new RadioGroup.LayoutParams(0, -2, 1f));
-        modes.addView(monthlyMode, new RadioGroup.LayoutParams(0, -2, 1f));
-        root.addView(modes);
-
-        hourlySettingsGroup = vertical();
-        hourlySettingsGroup.addView(text("每小时工资（£）", 14, true));
-        hourlyRateInput = decimalInput("例如：12.50");
-        hourlySettingsGroup.addView(hourlyRateInput);
-        root.addView(hourlySettingsGroup);
-
-        monthlySettingsGroup = vertical();
-        TextView monthlyLabel = text("每月固定工资（£）", 14, true);
-        monthlySettingsGroup.addView(monthlyLabel);
-        monthlySalaryInput = decimalInput("例如：2200");
-        monthlySettingsGroup.addView(monthlySalaryInput);
-
-        TextView rule = text("月薪模式：月薪按当月计划上班日平均分摊。公共假日和请假默认保留工资；只有明确标记“扣工资”的日期才扣除当天份额。", 13, false);
-        rule.setPadding(0, dp(8), 0, dp(8));
-        monthlySettingsGroup.addView(rule);
-        root.addView(monthlySettingsGroup);
-
-        modes.setOnCheckedChangeListener((group, checkedId) -> updateWageModeVisibility());
-
-        Button save = button("保存工资设置");
-        UiStyle.button(host, save, true);
-        save.setOnClickListener(v -> saveWageSettings());
-        root.addView(save, new LinearLayout.LayoutParams(-1, dp(52)));
-
-        TextView dayInfo = text("单日扣工资请在主页点击对应日期设置。", 13, false);
-        dayInfo.setPadding(0, dp(12), 0, dp(4));
-        root.addView(dayInfo);
+        TextView statsTitle = text("工资详情", 19, true);
+        statsTitle.setPadding(0, dp(14), 0, dp(4));
+        root.addView(statsTitle);
+        TextView statsInfo = text("工资规则请在设置页面修改。", 13, false);
+        statsInfo.setPadding(0, 0, 0, dp(4));
+        root.addView(statsInfo);
 
         LinearLayout viewTabs = horizontal();
         LinearLayout.LayoutParams viewTabsParams = new LinearLayout.LayoutParams(-1, dp(46));
@@ -271,56 +235,6 @@ public class WagePanel extends LinearLayout {
         monthTabButton.setOnClickListener(v -> showViewTab(2));
         showViewTab(0);
 
-    }
-
-    private void loadSettings() {
-        String mode = prefs.getString(WAGE_MODE_KEY, "hourly");
-        hourlyMode.setChecked(!"monthly".equals(mode));
-        monthlyMode.setChecked("monthly".equals(mode));
-        hourlyRateInput.setText(trimMoney(prefs.getFloat(HOURLY_RATE_KEY, 0f)));
-        monthlySalaryInput.setText(trimMoney(prefs.getFloat(MONTHLY_SALARY_KEY, 0f)));
-        updateWageModeVisibility();
-    }
-
-    private void updateWageModeVisibility() {
-        boolean monthly = monthlyMode != null && monthlyMode.isChecked();
-        if (hourlySettingsGroup != null) {
-            hourlySettingsGroup.setVisibility(monthly ? View.GONE : View.VISIBLE);
-        }
-        if (monthlySettingsGroup != null) {
-            monthlySettingsGroup.setVisibility(monthly ? View.VISIBLE : View.GONE);
-        }
-    }
-
-    private void saveWageSettings() {
-        boolean monthlySelected = monthlyMode.isChecked();
-        Float hourly = monthlySelected
-                ? prefs.getFloat(HOURLY_RATE_KEY, 0f)
-                : parseMoney(hourlyRateInput, "请输入正确的时薪");
-        Float monthly = monthlySelected
-                ? parseMoney(monthlySalaryInput, "请输入正确的月薪")
-                : prefs.getFloat(MONTHLY_SALARY_KEY, 0f);
-        if (hourly == null || monthly == null) return;
-        prefs.edit()
-                .putString(WAGE_MODE_KEY, monthlySelected ? "monthly" : "hourly")
-                .putFloat(HOURLY_RATE_KEY, hourly)
-                .putFloat(MONTHLY_SALARY_KEY, monthly)
-                .apply();
-        Toast.makeText(host, "工资设置已保存", Toast.LENGTH_SHORT).show();
-        refreshAll();
-    }
-
-    private Float parseMoney(EditText input, String error) {
-        String raw = input.getText().toString().trim();
-        if (raw.isEmpty()) return 0f;
-        try {
-            float value = Float.parseFloat(raw);
-            if (value < 0 || value > 10000000f) throw new NumberFormatException();
-            return value;
-        } catch (NumberFormatException e) {
-            input.setError(error);
-            return null;
-        }
     }
 
     private void chooseWeek() {
