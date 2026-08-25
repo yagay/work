@@ -1,6 +1,7 @@
 package com.example.workhours;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.DatePickerDialog;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
@@ -11,6 +12,7 @@ import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
@@ -241,6 +243,8 @@ public class WagePanel extends LinearLayout {
         monthNav.addView(previousMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
         monthTitle = text("", 18, true);
         monthTitle.setGravity(Gravity.CENTER);
+        monthTitle.setPadding(dp(8), dp(12), dp(8), dp(12));
+        monthTitle.setOnClickListener(v -> chooseMonth());
         monthNav.addView(monthTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         nextMonthButton = button("›");
         nextMonthButton.setTextSize(24);
@@ -323,6 +327,53 @@ public class WagePanel extends LinearLayout {
         dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
         LocalDate ws = getWorkStartDate();
         if (ws != null) dialog.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+        dialog.show();
+    }
+
+    private void chooseMonth() {
+        LocalDate ws = getWorkStartDate();
+        int minYear = ws == null ? Math.max(2000, displayedMonth.getYear() - 20) : ws.getYear();
+        int maxYear = YearMonth.now().getYear();
+
+        LinearLayout box = horizontal();
+        box.setPadding(dp(24), dp(12), dp(24), dp(4));
+        box.setGravity(Gravity.CENTER);
+
+        NumberPicker yearPicker = new NumberPicker(host);
+        yearPicker.setMinValue(minYear);
+        yearPicker.setMaxValue(maxYear);
+        yearPicker.setValue(Math.max(minYear, Math.min(maxYear, displayedMonth.getYear())));
+        box.addView(yearPicker, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        NumberPicker monthPicker = new NumberPicker(host);
+        monthPicker.setMinValue(1);
+        monthPicker.setMaxValue(12);
+        monthPicker.setDisplayedValues(new String[]{"1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"});
+        monthPicker.setValue(displayedMonth.getMonthValue());
+        box.addView(monthPicker, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        AlertDialog dialog = new AlertDialog.Builder(host)
+                .setTitle("选择月份")
+                .setView(box)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确定", null)
+                .create();
+        dialog.setOnShowListener(x -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            YearMonth picked = YearMonth.of(yearPicker.getValue(), monthPicker.getValue());
+            YearMonth now = YearMonth.now();
+            YearMonth first = ws == null ? null : YearMonth.from(ws);
+            if (picked.isAfter(now)) {
+                Toast.makeText(host, "不能选择未来月份", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (first != null && picked.isBefore(first)) {
+                Toast.makeText(host, "不能早于工作开始月份", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            displayedMonth = picked;
+            refreshMonth();
+            dialog.dismiss();
+        }));
         dialog.show();
     }
 
@@ -470,7 +521,7 @@ public class WagePanel extends LinearLayout {
         if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
         previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first));
         nextMonthButton.setEnabled(displayedMonth.isBefore(now));
-        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月");
+        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n点击选择月份");
         LocalDate start = displayedMonth.atDay(1);
         if (ws != null && start.isBefore(ws)) start = ws;
         LocalDate end = displayedMonth.equals(now) ? LocalDate.now() : displayedMonth.atEndOfMonth();
