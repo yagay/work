@@ -1,0 +1,21 @@
+name: Apply alarm retry notification
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/add_alarm_retry_notification.py
+      - run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/src/main/java/com/example/workhours/WorkAlarmRescheduleReceiver.java app/src/main/java/com/example/workhours/WorkAlarmNotification.java app/src/main/java/com/example/workhours/WorkAlarmRetryActivity.java app/src/main/AndroidManifest.xml
+            git commit -m "Retry alarm sync from notification on failure"
+            git push
+          fi
