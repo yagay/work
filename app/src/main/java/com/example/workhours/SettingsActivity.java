@@ -100,6 +100,7 @@ public class SettingsActivity extends Activity {
         appliedDarkTheme = AppThemeManager.apply(this);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         setContentView(buildUi());
+        AppThemeManager.applySystemBars(this);
         loadSettings();
     }
 

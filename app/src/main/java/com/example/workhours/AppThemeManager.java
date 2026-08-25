@@ -3,6 +3,8 @@ package com.example.workhours;
 import android.app.Activity;
 import android.content.Context;
 import android.content.res.Configuration;
+import android.view.Window;
+import android.view.WindowInsetsController;
 
 final class AppThemeManager {
     static final String KEY = "app_theme";
@@ -35,6 +37,21 @@ final class AppThemeManager {
         boolean dark = isDark(activity);
         UiStyle.applyDark(dark);
         return dark;
+    }
+
+    static void applySystemBars(Activity activity) {
+        boolean dark = isDark(activity);
+        Window window = activity.getWindow();
+        window.setStatusBarColor(UiStyle.PAGE_BG);
+        window.setNavigationBarColor(UiStyle.PAGE_BG);
+        try {
+            WindowInsetsController controller = window.getInsetsController();
+            if (controller != null) {
+                int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                        | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                controller.setSystemBarsAppearance(dark ? 0 : mask, mask);
+            }
+        } catch (Throwable ignored) { }
     }
 
     static String label(String mode) {

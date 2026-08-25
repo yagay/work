@@ -88,6 +88,7 @@ public class MainActivity extends Activity {
         if (ws != null && rangeStart.isBefore(ws)) rangeStart = ws;
         rangeEnd = today;
         setContentView(buildUi());
+        AppThemeManager.applySystemBars(this);
         refreshAll();
     }
 

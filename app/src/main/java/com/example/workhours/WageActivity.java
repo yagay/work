@@ -85,6 +85,7 @@ public class WageActivity extends Activity {
         selectedDate = today;
         ScrollView view = buildUi();
         setContentView(view);
+        AppThemeManager.applySystemBars(this);
         applySafeInsets(view);
         loadSettings();
         refreshAll();
