@@ -325,16 +325,16 @@ public class WageActivity extends Activity {
             hours += h;
             wage += after;
             if (isDeducted(d)) { deduction += before; deductionDays++; }
-            TextView row = text(d.format(df) + " · " + getDayStatus(d)
-                    + " · " + formatHours(h) + " · " + money(after)
-                    + (isDeducted(d) ? " · 已扣工资" : ""), 13, isDeducted(d));
+            TextView row = text(d.format(df) + " ｜ " + getDayStatus(d)
+                    + " ｜ " + formatHours(h) + " ｜ " + money(after)
+                    + (isDeducted(d) ? " ｜ 已扣工资" : ""), 13, isDeducted(d));
             row.setPadding(0, dp(4), 0, dp(4));
             weekDetails.addView(row);
         }
         weekSummary.setText("本周工时：" + formatHours(hours)
                 + "\n本周工资：" + money(wage)
-                + " · 扣工资：" + money(deduction)
-                + " · 扣工资天数：" + deductionDays + "天");
+                + " ｜ 扣工资：" + money(deduction)
+                + " ｜ 扣工资天数：" + deductionDays + "天");
     }
 
     private void refreshMonth() {
@@ -366,19 +366,19 @@ public class WageActivity extends Activity {
             if (h > 0) workDays++;
             if (isDeducted(d)) { deduction += before; deductionDays++; }
             if (h > 0 || before > 0 || isDeducted(d) || isLeave(d) || isBankHoliday(d)) {
-                TextView row = text(d.format(df) + " · " + getDayStatus(d)
-                        + " · " + formatHours(h) + " · " + money(after)
-                        + (isDeducted(d) ? " · 已扣工资" : ""), 13, isDeducted(d));
+                TextView row = text(d.format(df) + " ｜ " + getDayStatus(d)
+                        + " ｜ " + formatHours(h) + " ｜ " + money(after)
+                        + (isDeducted(d) ? " ｜ 已扣工资" : ""), 13, isDeducted(d));
                 row.setPadding(0, dp(4), 0, dp(4));
                 monthDetails.addView(row);
             }
         }
         String modeText = isMonthlyMode() ? "月薪模式" : "时薪模式";
         monthSummary.setText(modeText
-                + "\n本月工时：" + formatHours(hours) + " · 工作：" + workDays + "天"
+                + "\n本月工时：" + formatHours(hours) + " ｜ 工作：" + workDays + "天"
                 + "\n本月工资：" + money(wage)
-                + " · 已扣：" + money(deduction)
-                + " · 扣工资：" + deductionDays + "天");
+                + " ｜ 已扣：" + money(deduction)
+                + " ｜ 扣工资：" + deductionDays + "天");
     }
 
     private float getWageForDate(LocalDate date) {

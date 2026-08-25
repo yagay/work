@@ -73,7 +73,7 @@ public class WorkHoursApplication extends Application {
     private static final Pattern DEDUCT_PATTERN =
             Pattern.compile("(?:已扣|扣工资)(?:\\s*[:：]?\\s*-?£?[0-9.,]+|\\s*[:：]?\\s*\\d+天)?");
     private static final Pattern OVERTIME_PATTERN =
-            Pattern.compile("加班(?:\\s*[:：]?\\s*[^\\n·）)]*)?");
+            Pattern.compile("加班(?:\\s*[:：]?\\s*[^\\n｜）)]*)?");
 
     @Override
     public void onCreate() {

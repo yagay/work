@@ -228,13 +228,13 @@ public class MainActivity extends Activity {
         for(LocalDate d=start;!d.isAfter(end);d=d.plusDays(1)){
             boolean holiday=isBankHoliday(d),leave=!holiday&&isLeave(d),manualRest=!holiday&&!leave&&isManualRest(d),configured=isConfiguredWorkDay(d)&&!holiday,override=!holiday&&!leave&&!manualRest&&hasOverride(d),autoRest=!holiday&&!leave&&!manualRest&&!override&&!configured;
             float base=getBaseHoursForDate(d,daily,configured),ot=getOvertimeHours(d); String line=null;
-            if(holiday)line=d.format(f)+" · 公共假日 · "+getBankHolidayName(d)+" · 0 小时";
-            else if(leave)line=d.format(f)+" · 请假"+(getLeaveNote(d).isEmpty()?"":" · "+getLeaveNote(d))+" · 0 小时";
-            else if(manualRest)line=d.format(f)+" · 休息 · 手动修改";
-            else if(override)line=d.format(f)+" · 自定义工时 · "+formatDurationHours(base)+(getDayTimeSummary(d).isEmpty()?"":" · "+getDayTimeSummary(d));
-            else if(includeAutoRest&&autoRest)line=d.format(f)+" · 休息 · 自动规则";
-            else if(includeNormal&&base>0)line=d.format(f)+" · 正常上班 · "+formatDurationHours(base);
-            if(ot>0){String otText="加班 "+getOvertimeTimeSummary(d)+" · "+formatDurationHours(ot);line=line==null?d.format(f)+" · "+otText:line+" · "+otText;}
+            if(holiday)line=d.format(f)+" ｜ 公共假日 ｜ "+getBankHolidayName(d)+" ｜ 0 小时";
+            else if(leave)line=d.format(f)+" ｜ 请假"+(getLeaveNote(d).isEmpty()?"":" ｜ "+getLeaveNote(d))+" ｜ 0 小时";
+            else if(manualRest)line=d.format(f)+" ｜ 休息 ｜ 手动修改";
+            else if(override)line=d.format(f)+" ｜ 自定义工时 ｜ "+formatDurationHours(base)+(getDayTimeSummary(d).isEmpty()?"":" ｜ "+getDayTimeSummary(d));
+            else if(includeAutoRest&&autoRest)line=d.format(f)+" ｜ 休息 ｜ 自动规则";
+            else if(includeNormal&&base>0)line=d.format(f)+" ｜ 正常上班 ｜ "+formatDurationHours(base);
+            if(ot>0){String otText="加班 "+getOvertimeTimeSummary(d)+" ｜ "+formatDurationHours(ot);line=line==null?d.format(f)+" ｜ "+otText:line+" ｜ "+otText;}
             if(line!=null){TextView row=text(line,13,holiday||leave||manualRest||override||ot>0);row.setPadding(0,dp(5),0,dp(5));container.addView(row);count++;}
         }
         if(count==0)container.addView(text(includeNormal?"这一周没有可显示的记录。":"本月无公共假日、请假、手动休息、自定义工时或加班记录。",13,false));
