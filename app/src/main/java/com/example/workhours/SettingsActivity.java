@@ -131,19 +131,20 @@ public class SettingsActivity extends Activity {
         TextView timeTitle = text("每天工作时间", 17, true);
         timeTitle.setPadding(0, dp(24), 0, dp(8));
         root.addView(timeTitle);
-        root.addView(text("上班时间（HH:mm）", 15, true));
+        LinearLayout startRow = settingInputRow("上班时间", dp(126));
         startInput = input("09:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
-        root.addView(startInput);
-        TextView endLabel = text("下班时间（HH:mm）", 15, true);
-        endLabel.setPadding(0, dp(14), 0, 0);
-        root.addView(endLabel);
+        startRow.addView(startInput, compactInputParams(dp(126)));
+        root.addView(startRow);
+
+        LinearLayout endRow = settingInputRow("下班时间", dp(126));
         endInput = input("17:30", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
-        root.addView(endInput);
-        TextView breakLabel = text("休息时间（分钟）", 15, true);
-        breakLabel.setPadding(0, dp(14), 0, 0);
-        root.addView(breakLabel);
+        endRow.addView(endInput, compactInputParams(dp(126)));
+        root.addView(endRow);
+
+        LinearLayout breakRow = settingInputRow("休息时间", dp(126));
         breakInput = input("30", InputType.TYPE_CLASS_NUMBER);
-        root.addView(breakInput);
+        breakRow.addView(breakInput, compactInputParams(dp(126)));
+        root.addView(breakRow);
 
         TextView alarmTitle = text("上班闹钟", 17, true);
         alarmTitle.setPadding(0, dp(22), 0, dp(4));
@@ -164,24 +165,19 @@ public class SettingsActivity extends Activity {
         alarmFollowWorkTimeCheck.setTextSize(16);
         root.addView(alarmFollowWorkTimeCheck);
 
-        alarmTimeGroup = new LinearLayout(this);
-        alarmTimeGroup.setOrientation(LinearLayout.VERTICAL);
-        TextView alarmTimeLabel = text("自定义闹钟时间（HH:mm）", 15, true);
-        alarmTimeLabel.setPadding(0, dp(4), 0, 0);
-        alarmTimeGroup.addView(alarmTimeLabel);
-        alarmTimeInput = input("例如：07:30", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
-        alarmTimeGroup.addView(alarmTimeInput);
+        alarmTimeGroup = settingInputRow("自定义闹钟时间", dp(126));
+        alarmTimeInput = input("07:30", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+        alarmTimeGroup.addView(alarmTimeInput, compactInputParams(dp(126)));
         root.addView(alarmTimeGroup);
 
         Runnable updateAlarmTimeVisibility = () -> alarmTimeGroup.setVisibility(
                 alarmFollowWorkTimeCheck.isChecked() ? android.view.View.GONE : android.view.View.VISIBLE);
         alarmFollowWorkTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> updateAlarmTimeVisibility.run());
 
-        TextView updateTimeLabel = text("每周日自动更新闹钟时间（HH:mm）", 15, true);
-        updateTimeLabel.setPadding(0, dp(12), 0, 0);
-        root.addView(updateTimeLabel);
-        alarmUpdateTimeInput = input("例如：12:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
-        root.addView(alarmUpdateTimeInput);
+        LinearLayout updateTimeRow = settingInputRow("自动更新闹钟时间", dp(126));
+        alarmUpdateTimeInput = input("12:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+        updateTimeRow.addView(alarmUpdateTimeInput, compactInputParams(dp(126)));
+        root.addView(updateTimeRow);
         TextView updateTimeInfo = text("每周日到这个时间自动重新计算下一周工作日并同步系统时钟。系统省电策略可能让后台执行稍有延迟。", 13, false);
         updateTimeInfo.setPadding(0, dp(4), 0, 0);
         root.addView(updateTimeInfo);
@@ -459,6 +455,23 @@ public class SettingsActivity extends Activity {
         } catch (Exception e) {
             Toast.makeText(this, "导入失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
         }
+    }
+
+    private LinearLayout settingInputRow(String label, int inputWidth) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(6), 0, dp(6));
+        TextView title = text(label, 15, true);
+        row.addView(title, new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        return row;
+    }
+
+    private LinearLayout.LayoutParams compactInputParams(int width) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(width, dp(48));
+        params.leftMargin = dp(12);
+        return params;
     }
 
     private EditText input(String hint, int type) {
