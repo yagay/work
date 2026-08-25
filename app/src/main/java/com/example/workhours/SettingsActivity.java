@@ -63,7 +63,7 @@ public class SettingsActivity extends Activity {
     private LinearLayout alarmTimeGroup;
     private EditText alarmUpdateTimeInput;
     private LocalDate workStartDate;
-    private final CheckBox[] restDayChecks = new CheckBox[7];
+    private final Button[] restDayButtons = new Button[7];
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -195,15 +195,38 @@ public class SettingsActivity extends Activity {
         TextView weeklyTitle = text("每周休息日", 17, true);
         weeklyTitle.setPadding(0, dp(24), 0, dp(4));
         root.addView(weeklyTitle);
-        TextView weeklyInfo = text("勾选一星期中固定休息的日期。默认周六、周日休息。", 13, false);
-        weeklyInfo.setPadding(0, 0, 0, dp(6));
+        TextView weeklyInfo = text("点选固定休息日；高亮表示休息。默认周六、周日休息。", 13, false);
+        weeklyInfo.setPadding(0, 0, 0, dp(8));
         root.addView(weeklyInfo);
         String[] names = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
+        LinearLayout restRow1 = new LinearLayout(this);
+        restRow1.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(restRow1);
+        LinearLayout restRow2 = new LinearLayout(this);
+        restRow2.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams restRow2Params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        restRow2Params.topMargin = dp(8);
+        root.addView(restRow2, restRow2Params);
         for (int i = 0; i < 7; i++) {
-            restDayChecks[i] = new CheckBox(this);
-            restDayChecks[i].setText(names[i] + "休息");
-            restDayChecks[i].setTextSize(16);
-            root.addView(restDayChecks[i]);
+            final int index = i;
+            Button day = new Button(this);
+            day.setText(names[i]);
+            day.setTextSize(14);
+            day.setAllCaps(false);
+            day.setMinHeight(0);
+            day.setMinWidth(0);
+            day.setPadding(dp(6), 0, dp(6), 0);
+            day.setOnClickListener(v -> {
+                day.setSelected(!day.isSelected());
+                updateRestDayButtonStyle(day);
+            });
+            restDayButtons[i] = day;
+            LinearLayout target = i < 4 ? restRow1 : restRow2;
+            LinearLayout.LayoutParams dayParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
+            if ((i < 4 && i > 0) || (i >= 4 && i > 4)) dayParams.leftMargin = dp(8);
+            target.addView(day, dayParams);
+            updateRestDayButtonStyle(day);
         }
 
         TextView monthlyTitle = text("每月固定休息日期", 17, true);
@@ -457,6 +480,14 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private void updateRestDayButtonStyle(Button button) {
+        boolean rest = button.isSelected();
+        button.setTextColor(rest ? android.graphics.Color.WHITE : UiStyle.TEXT);
+        button.setBackground(UiStyle.roundRect(this,
+                rest ? UiStyle.PRIMARY : UiStyle.CARD_BG,
+                14, rest ? UiStyle.PRIMARY : UiStyle.BORDER, 1));
+    }
+
     private LinearLayout settingInputRow(String label, int inputWidth) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -506,7 +537,8 @@ public class SettingsActivity extends Activity {
 
         for (int i = 0; i < 7; i++) {
             boolean wasWorkDay = prefs.getBoolean("day_" + i, i < 5);
-            restDayChecks[i].setChecked(!wasWorkDay);
+            restDayButtons[i].setSelected(!wasWorkDay);
+            updateRestDayButtonStyle(restDayButtons[i]);
         }
         updatePreview(false);
     }
@@ -565,7 +597,7 @@ public class SettingsActivity extends Activity {
         else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());
 
         for (int i = 0; i < 7; i++) {
-            editor.putBoolean("day_" + i, !restDayChecks[i].isChecked());
+            editor.putBoolean("day_" + i, !restDayButtons[i].isSelected());
         }
         editor.apply();
 
