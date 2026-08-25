@@ -49,6 +49,7 @@ public class WagePanel extends LinearLayout {
     private static final String BREAK_MINUTES_KEY = "break_minutes";
     private static final String WORK_START_DATE_KEY = "work_start_date";
     private static final String MONTHLY_REST_DAYS_KEY = "monthly_rest_days";
+    private static final String REST_RULE_MODE_KEY = "rest_rule_mode";
 
     private SharedPreferences prefs;
     private RadioButton hourlyMode;
@@ -505,9 +506,9 @@ public class WagePanel extends LinearLayout {
     }
 
     private boolean isPlannedPaidDay(LocalDate date) {
+        if ("monthly".equals(prefs.getString(REST_RULE_MODE_KEY, "weekly"))) return !isMonthlyRestDay(date);
         int index = date.getDayOfWeek().getValue() - 1;
-        boolean weekly = prefs.getBoolean("day_" + index, index < 5);
-        return weekly && !isMonthlyRestDay(date);
+        return prefs.getBoolean("day_" + index, index < 5);
     }
 
     private float getHours(LocalDate date) {

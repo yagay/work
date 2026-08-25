@@ -51,6 +51,7 @@ public class SettingsActivity extends Activity {
     private static final String BREAK_MINUTES_KEY = "break_minutes";
     private static final String WORK_START_DATE_KEY = "work_start_date";
     private static final String MONTHLY_REST_DAYS_KEY = "monthly_rest_days";
+    private static final String REST_RULE_MODE_KEY = "rest_rule_mode";
     private static final String WAGE_MODE_KEY = "wage_mode";
     private static final String HOURLY_RATE_KEY = "hourly_rate";
     private static final String MONTHLY_SALARY_KEY = "monthly_salary";
@@ -64,6 +65,14 @@ public class SettingsActivity extends Activity {
     private EditText breakInput;
     private EditText monthlyRestInput;
     private Button monthlyRestButton;
+    private Button weeklyRestModeButton;
+    private Button monthlyRestModeButton;
+    private LinearLayout weeklyRestGroup;
+    private LinearLayout monthlyRestGroup;
+    private GridLayout monthlyRestCalendarGrid;
+    private TextView monthlyRestMonthTitle;
+    private java.time.YearMonth displayedRestMonth;
+    private String restRuleMode = "weekly";
     private LinearLayout alarmOptionsGroup;
     private TextView previewText;
     private Button workStartDateButton;
@@ -218,35 +227,48 @@ public class SettingsActivity extends Activity {
         endInput.addTextChangedListener(hoursWatcher);
         breakInput.addTextChangedListener(hoursWatcher);
 
-        TextView weeklyTitle = text("每周休息日", 17, true);
-        weeklyTitle.setPadding(0, dp(24), 0, dp(4));
-        root.addView(weeklyTitle);
+        TextView restRuleTitle = text("休息规则", 17, true);
+        restRuleTitle.setPadding(0, dp(24), 0, dp(8));
+        root.addView(restRuleTitle);
+        TextView restRuleInfo = text("每周休息日和每月固定休息日二选一，只会使用当前选中的规则。", 13, false);
+        restRuleInfo.setPadding(0, 0, 0, dp(8));
+        root.addView(restRuleInfo);
+
+        LinearLayout restModeRow = new LinearLayout(this);
+        restModeRow.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(restModeRow);
+        weeklyRestModeButton = new Button(this);
+        weeklyRestModeButton.setText("每周休息日");
+        weeklyRestModeButton.setOnClickListener(v -> setRestRuleMode("weekly"));
+        restModeRow.addView(weeklyRestModeButton, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        monthlyRestModeButton = new Button(this);
+        monthlyRestModeButton.setText("每月固定休息日");
+        monthlyRestModeButton.setOnClickListener(v -> setRestRuleMode("monthly"));
+        LinearLayout.LayoutParams mrmp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        mrmp.leftMargin = dp(8);
+        restModeRow.addView(monthlyRestModeButton, mrmp);
+
+        weeklyRestGroup = new LinearLayout(this);
+        weeklyRestGroup.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams wrgp = new LinearLayout.LayoutParams(-1, -2);
+        wrgp.topMargin = dp(12);
+        root.addView(weeklyRestGroup, wrgp);
         TextView weeklyInfo = text("点选固定休息日；高亮表示休息。默认周六、周日休息。", 13, false);
         weeklyInfo.setPadding(0, 0, 0, dp(8));
-        root.addView(weeklyInfo);
+        weeklyRestGroup.addView(weeklyInfo);
         String[] names = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
         LinearLayout restRow1 = new LinearLayout(this);
         restRow1.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(restRow1);
+        weeklyRestGroup.addView(restRow1);
         LinearLayout restRow2 = new LinearLayout(this);
         restRow2.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams restRow2Params = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        LinearLayout.LayoutParams restRow2Params = new LinearLayout.LayoutParams(-1, -2);
         restRow2Params.topMargin = dp(8);
-        root.addView(restRow2, restRow2Params);
+        weeklyRestGroup.addView(restRow2, restRow2Params);
         for (int i = 0; i < 7; i++) {
-            final int index = i;
             Button day = new Button(this);
-            day.setText(names[i]);
-            day.setTextSize(14);
-            day.setAllCaps(false);
-            day.setMinHeight(0);
-            day.setMinWidth(0);
-            day.setPadding(dp(6), 0, dp(6), 0);
-            day.setOnClickListener(v -> {
-                day.setSelected(!day.isSelected());
-                updateRestDayButtonStyle(day);
-            });
+            day.setText(names[i]); day.setTextSize(14); day.setAllCaps(false); day.setMinHeight(0); day.setMinWidth(0); day.setPadding(dp(6),0,dp(6),0);
+            day.setOnClickListener(v -> { day.setSelected(!day.isSelected()); updateRestDayButtonStyle(day); });
             restDayButtons[i] = day;
             LinearLayout target = i < 4 ? restRow1 : restRow2;
             LinearLayout.LayoutParams dayParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
@@ -255,58 +277,34 @@ public class SettingsActivity extends Activity {
             updateRestDayButtonStyle(day);
         }
 
-        TextView monthlyTitle = text("每月固定休息日期", 17, true);
-        monthlyTitle.setPadding(0, dp(24), 0, dp(4));
-        root.addView(monthlyTitle);
-        TextView monthlyInfo = text("点击选择每月固定休息的日期。", 13, false);
-        monthlyInfo.setPadding(0, 0, 0, dp(6));
-        root.addView(monthlyInfo);
+        monthlyRestGroup = new LinearLayout(this);
+        monthlyRestGroup.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams mrgp = new LinearLayout.LayoutParams(-1, -2);
+        mrgp.topMargin = dp(12);
+        root.addView(monthlyRestGroup, mrgp);
+        TextView monthlyInfo = text("点选日期作为每月固定休息日。月份用于查看日期对应星期和周末；所选日期会每月重复。", 13, false);
+        monthlyInfo.setPadding(0, 0, 0, dp(8));
+        monthlyRestGroup.addView(monthlyInfo);
         monthlyRestInput = input("", InputType.TYPE_CLASS_TEXT);
         monthlyRestInput.setVisibility(android.view.View.GONE);
-        root.addView(monthlyRestInput);
-        monthlyRestButton = new Button(this);
-        UiStyle.button(this, monthlyRestButton, false);
-        monthlyRestButton.setOnClickListener(v -> showMonthlyRestPicker());
-        root.addView(monthlyRestButton, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(50)));
+        monthlyRestGroup.addView(monthlyRestInput);
 
-        TextView wageTitle = text("工资设置", 17, true);
-        wageTitle.setPadding(0, dp(26), 0, dp(6));
-        root.addView(wageTitle);
-        TextView wageInfo = text("设置工资计算方式。工资统计页面只负责查看，不再修改工资规则。", 13, false);
-        wageInfo.setPadding(0, 0, 0, dp(8));
-        root.addView(wageInfo);
+        LinearLayout monthNav = new LinearLayout(this);
+        monthNav.setOrientation(LinearLayout.HORIZONTAL); monthNav.setGravity(Gravity.CENTER_VERTICAL);
+        monthlyRestGroup.addView(monthNav, new LinearLayout.LayoutParams(-1, dp(54)));
+        Button prevRestMonth = new Button(this); prevRestMonth.setText("‹"); prevRestMonth.setTextSize(24); UiStyle.navButton(this, prevRestMonth);
+        prevRestMonth.setOnClickListener(v -> { displayedRestMonth = displayedRestMonth.minusMonths(1); rebuildMonthlyRestCalendar(); });
+        monthNav.addView(prevRestMonth, new LinearLayout.LayoutParams(dp(58), dp(48)));
+        monthlyRestMonthTitle = text("", 18, true); monthlyRestMonthTitle.setGravity(Gravity.CENTER);
+        monthNav.addView(monthlyRestMonthTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        Button nextRestMonth = new Button(this); nextRestMonth.setText("›"); nextRestMonth.setTextSize(24); UiStyle.navButton(this, nextRestMonth);
+        nextRestMonth.setOnClickListener(v -> { displayedRestMonth = displayedRestMonth.plusMonths(1); rebuildMonthlyRestCalendar(); });
+        monthNav.addView(nextRestMonth, new LinearLayout.LayoutParams(dp(58), dp(48)));
 
-        RadioGroup wageModes = new RadioGroup(this);
-        wageModes.setOrientation(RadioGroup.HORIZONTAL);
-        hourlyWageMode = new RadioButton(this);
-        hourlyWageMode.setText("按小时工资");
-        monthlyWageMode = new RadioButton(this);
-        monthlyWageMode.setText("按月固定工资");
-        wageModes.addView(hourlyWageMode, new RadioGroup.LayoutParams(0, -2, 1f));
-        wageModes.addView(monthlyWageMode, new RadioGroup.LayoutParams(0, -2, 1f));
-        root.addView(wageModes);
-
-        hourlyWageGroup = new LinearLayout(this);
-        hourlyWageGroup.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout hourlyRow = settingInputRow("每小时工资（£）", dp(126));
-        hourlyRateInput = input("12.50", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        hourlyRow.addView(hourlyRateInput, compactInputParams(dp(126)));
-        hourlyWageGroup.addView(hourlyRow);
-        root.addView(hourlyWageGroup);
-
-        monthlyWageGroup = new LinearLayout(this);
-        monthlyWageGroup.setOrientation(LinearLayout.VERTICAL);
-        LinearLayout monthlySalaryRow = settingInputRow("每月固定工资（£）", dp(126));
-        monthlySalaryInput = input("2200", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        monthlySalaryRow.addView(monthlySalaryInput, compactInputParams(dp(126)));
-        monthlyWageGroup.addView(monthlySalaryRow);
-        TextView monthlyRule = text("月薪按当月计划上班日平均分摊。公共假日和请假默认保留工资；只有明确标记“扣工资”的日期才扣除当天份额。", 13, false);
-        monthlyRule.setPadding(0, dp(4), 0, dp(4));
-        monthlyWageGroup.addView(monthlyRule);
-        root.addView(monthlyWageGroup);
-
-        wageModes.setOnCheckedChangeListener((group, checkedId) -> updateWageModeVisibility());
+        monthlyRestCalendarGrid = new GridLayout(this);
+        monthlyRestCalendarGrid.setColumnCount(7); monthlyRestCalendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+        monthlyRestGroup.addView(monthlyRestCalendarGrid);
+        monthlyRestButton = new Button(this); monthlyRestButton.setVisibility(android.view.View.GONE); monthlyRestGroup.addView(monthlyRestButton);
 
         Button save = new Button(this);
         UiStyle.button(this, save, true);
@@ -550,6 +548,70 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private void setRestRuleMode(String mode) {
+        restRuleMode = "monthly".equals(mode) ? "monthly" : "weekly";
+        boolean monthly = "monthly".equals(restRuleMode);
+        if (weeklyRestGroup != null) weeklyRestGroup.setVisibility(monthly ? android.view.View.GONE : android.view.View.VISIBLE);
+        if (monthlyRestGroup != null) monthlyRestGroup.setVisibility(monthly ? android.view.View.VISIBLE : android.view.View.GONE);
+        if (weeklyRestModeButton != null) { weeklyRestModeButton.setSelected(!monthly); updateRestModeButtonStyle(weeklyRestModeButton, !monthly); }
+        if (monthlyRestModeButton != null) { monthlyRestModeButton.setSelected(monthly); updateRestModeButtonStyle(monthlyRestModeButton, monthly); }
+        if (monthly && monthlyRestCalendarGrid != null) rebuildMonthlyRestCalendar();
+    }
+
+    private void updateRestModeButtonStyle(Button button, boolean selected) {
+        button.setTextColor(selected ? android.graphics.Color.WHITE : UiStyle.TEXT);
+        button.setBackground(UiStyle.roundRect(this, selected ? UiStyle.PRIMARY : UiStyle.CARD_BG, 14, selected ? UiStyle.PRIMARY : UiStyle.BORDER, 1));
+    }
+
+    private Set<Integer> selectedMonthlyRestDays() {
+        Set<Integer> out = new LinkedHashSet<>();
+        if (monthlyRestInput == null) return out;
+        String raw = monthlyRestInput.getText().toString().trim();
+        if (raw.isEmpty()) return out;
+        for (String part : raw.replace('，', ',').split(",")) {
+            try { int d = Integer.parseInt(part.trim()); if (d >= 1 && d <= 31) out.add(d); } catch (Exception ignored) { }
+        }
+        return out;
+    }
+
+    private void writeSelectedMonthlyRestDays(Set<Integer> days) {
+        StringBuilder out = new StringBuilder();
+        for (int d = 1; d <= 31; d++) if (days.contains(d)) { if (out.length() > 0) out.append(", "); out.append(d); }
+        monthlyRestInput.setText(out.toString());
+        updateMonthlyRestButton();
+    }
+
+    private void rebuildMonthlyRestCalendar() {
+        if (monthlyRestCalendarGrid == null || displayedRestMonth == null) return;
+        monthlyRestCalendarGrid.removeAllViews();
+        monthlyRestMonthTitle.setText(displayedRestMonth.getYear() + "年" + displayedRestMonth.getMonthValue() + "月");
+        String[] heads = {"一","二","三","四","五","六","日"};
+        for (int i=0;i<7;i++) {
+            TextView h=text(heads[i],13,true); h.setGravity(Gravity.CENTER);
+            if (i>=5) h.setTextColor(0xFFB14A4A);
+            GridLayout.LayoutParams hp=new GridLayout.LayoutParams(); hp.width=0; hp.height=dp(34); hp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);
+            monthlyRestCalendarGrid.addView(h,hp);
+        }
+        int leading=displayedRestMonth.atDay(1).getDayOfWeek().getValue()-1;
+        Set<Integer> selected=selectedMonthlyRestDays();
+        int cells=((leading+displayedRestMonth.lengthOfMonth()+6)/7)*7;
+        for(int i=0;i<cells;i++) {
+            int day=i-leading+1;
+            if(day<1||day>displayedRestMonth.lengthOfMonth()) {
+                TextView blank=text("",13,false); GridLayout.LayoutParams bp=new GridLayout.LayoutParams(); bp.width=0; bp.height=dp(46); bp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f); monthlyRestCalendarGrid.addView(blank,bp); continue;
+            }
+            java.time.LocalDate date=displayedRestMonth.atDay(day);
+            boolean weekend=date.getDayOfWeek()==java.time.DayOfWeek.SATURDAY||date.getDayOfWeek()==java.time.DayOfWeek.SUNDAY;
+            Button b=new Button(this); b.setText(String.valueOf(day)); b.setTextSize(13); b.setAllCaps(false); b.setMinWidth(0); b.setMinHeight(0); b.setPadding(0,0,0,0);
+            boolean sel=selected.contains(day);
+            b.setTextColor(sel ? android.graphics.Color.WHITE : (weekend ? 0xFFB14A4A : UiStyle.TEXT));
+            b.setBackground(UiStyle.roundRect(this, sel ? UiStyle.PRIMARY : (weekend ? 0xFFFFF4F4 : UiStyle.CARD_BG), 10, sel ? UiStyle.PRIMARY : UiStyle.BORDER, 1));
+            b.setOnClickListener(v -> { Set<Integer> cur=selectedMonthlyRestDays(); if(cur.contains(day))cur.remove(day);else cur.add(day); writeSelectedMonthlyRestDays(cur); rebuildMonthlyRestCalendar(); });
+            GridLayout.LayoutParams gp=new GridLayout.LayoutParams(); gp.width=0; gp.height=dp(46); gp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f); gp.setMargins(dp(2),dp(2),dp(2),dp(2));
+            monthlyRestCalendarGrid.addView(b,gp);
+        }
+    }
+
     private void updateRestDayButtonStyle(Button button) {
         boolean rest = button.isSelected();
         button.setTextColor(rest ? android.graphics.Color.WHITE : UiStyle.TEXT);
@@ -641,6 +703,9 @@ public class SettingsActivity extends Activity {
         endInput.setText(prefs.getString(END_TIME_KEY, "17:30"));
         breakInput.setText(String.valueOf(prefs.getInt(BREAK_MINUTES_KEY, 30)));
         monthlyRestInput.setText(prefs.getString(MONTHLY_REST_DAYS_KEY, ""));
+        restRuleMode = prefs.getString(REST_RULE_MODE_KEY, "weekly");
+        if (!"monthly".equals(restRuleMode)) restRuleMode = "weekly";
+        displayedRestMonth = java.time.YearMonth.now();
         workAlarmCheck.setChecked(prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false));
         alarmFollowWorkTimeCheck.setChecked(prefs.getBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, true));
         alarmTimeInput.setText(prefs.getString(WorkAlarmManager.ALARM_TIME_KEY, "07:30"));
@@ -650,6 +715,8 @@ public class SettingsActivity extends Activity {
         alarmOptionsGroup.setVisibility(workAlarmCheck.isChecked()
                 ? android.view.View.VISIBLE : android.view.View.GONE);
         updateMonthlyRestButton();
+        setRestRuleMode(restRuleMode);
+        rebuildMonthlyRestCalendar();
         String wageMode = prefs.getString(WAGE_MODE_KEY, "hourly");
         hourlyWageMode.setChecked(!"monthly".equals(wageMode));
         monthlyWageMode.setChecked("monthly".equals(wageMode));
@@ -747,6 +814,7 @@ public class SettingsActivity extends Activity {
                 .putInt(BREAK_MINUTES_KEY, breakMinutes)
                 .putFloat("daily_hours", dailyHours)
                 .putString(MONTHLY_REST_DAYS_KEY, monthlyRestDays)
+                .putString(REST_RULE_MODE_KEY, restRuleMode)
                 .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked())
                 .putBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, followWorkTime)
                 .putString(WorkAlarmManager.ALARM_TIME_KEY, alarmTime)

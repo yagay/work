@@ -53,6 +53,7 @@ public class MainActivity extends Activity {
     private static final String BREAK_MINUTES_KEY = "break_minutes";
     private static final String WORK_START_DATE_KEY = "work_start_date";
     private static final String MONTHLY_REST_DAYS_KEY = "monthly_rest_days";
+    private static final String REST_RULE_MODE_KEY = "rest_rule_mode";
 
     private SharedPreferences prefs;
     private YearMonth displayedMonth;
@@ -452,7 +453,10 @@ public class MainActivity extends Activity {
     private float getOvertimeHours(LocalDate d){if(!hasOvertime(d))return 0f;Float h=calculateHours(prefs.getString(overtimeStartKey(d),""),prefs.getString(overtimeEndKey(d),""),0);return h==null?0f:h;}
     private String getOvertimeTimeSummary(LocalDate d){return hasOvertime(d)?prefs.getString(overtimeStartKey(d),"")+"–"+prefs.getString(overtimeEndKey(d),""):"";}
     private String getDayTimeSummary(LocalDate d){if(!prefs.contains(dayStartKey(d))||!prefs.contains(dayEndKey(d)))return "";return prefs.getString(dayStartKey(d),"")+"–"+prefs.getString(dayEndKey(d),"")+" / 休息"+prefs.getInt(dayBreakKey(d),0)+"分钟";}
-    private boolean isConfiguredWorkDay(LocalDate d){int i=d.getDayOfWeek().getValue()-1;return prefs.getBoolean("day_"+i,i<5)&&!getMonthlyRestDays().contains(d.getDayOfMonth());}
+    private boolean isConfiguredWorkDay(LocalDate d){
+        if("monthly".equals(prefs.getString(REST_RULE_MODE_KEY,"weekly"))) return !getMonthlyRestDays().contains(d.getDayOfMonth());
+        int i=d.getDayOfWeek().getValue()-1; return prefs.getBoolean("day_"+i,i<5);
+    }
     private Set<Integer> getMonthlyRestDays(){Set<Integer>s=new HashSet<>();String raw=prefs.getString(MONTHLY_REST_DAYS_KEY,"");if(raw==null||raw.trim().isEmpty())return s;for(String p:raw.replace('，',',').split(",")){try{int v=Integer.parseInt(p.trim());if(v>=1&&v<=31)s.add(v);}catch(Exception ignored){}}return s;}
     private float getConfiguredDailyHours(){LocalTime s=parseTime(prefs.getString(START_TIME_KEY,"09:00")),e=parseTime(prefs.getString(END_TIME_KEY,"17:30"));int br=prefs.getInt(BREAK_MINUTES_KEY,30);if(s==null||e==null)return prefs.getFloat("daily_hours",8f);long m=Duration.between(s,e).toMinutes();if(m<=0)m+=1440;return Math.max(0,m-br)/60f;}
     private LocalTime parseTime(String r){try{return LocalTime.parse(r,DateTimeFormatter.ofPattern("HH:mm"));}catch(Exception e){return null;}}

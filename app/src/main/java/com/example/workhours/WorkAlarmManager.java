@@ -31,6 +31,7 @@ public final class WorkAlarmManager {
     private static final String START_TIME_KEY = "start_time";
     private static final String WORK_START_DATE_KEY = "work_start_date";
     private static final String MONTHLY_REST_DAYS_KEY = "monthly_rest_days";
+    private static final String REST_RULE_MODE_KEY = "rest_rule_mode";
     private static final String LEAVE_PREFIX = "leave_";
     private static final String REST_PREFIX = "rest_";
     private static final String OVERRIDE_PREFIX = "hours_";
@@ -148,9 +149,11 @@ public final class WorkAlarmManager {
         // A manually configured normal work day overrides automatic weekly/monthly rest rules.
         if (prefs.contains(OVERRIDE_PREFIX + date)) return true;
 
+        if ("monthly".equals(prefs.getString(REST_RULE_MODE_KEY, "weekly"))) {
+            return !getMonthlyRestDays(prefs).contains(date.getDayOfMonth());
+        }
         int dayIndex = date.getDayOfWeek().getValue() - 1;
-        if (!prefs.getBoolean("day_" + dayIndex, dayIndex < 5)) return false;
-        return !getMonthlyRestDays(prefs).contains(date.getDayOfMonth());
+        return prefs.getBoolean("day_" + dayIndex, dayIndex < 5);
     }
 
     private static int toCalendarDay(DayOfWeek day) {
