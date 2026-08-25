@@ -62,6 +62,9 @@ public class MainActivity extends Activity {
     private GridLayout calendarGrid;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
     private LinearLayout weekSectionContainer, rangeSectionContainer;
+    private LinearLayout workContent, wageContent;
+    private Button workTabButton, wageTabButton;
+    private WagePanel wagePanel;
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
     private Button rangeStartButton, rangeEndButton;
 
@@ -91,6 +94,7 @@ public class MainActivity extends Activity {
             if (displayedWeekStart.isBefore(mondayOf(ws))) displayedWeekStart = mondayOf(ws);
         }
         refreshAll();
+        if (wagePanel != null) wagePanel.refresh();
     }
 
     private ScrollView buildUi() {
@@ -114,28 +118,31 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
         quickSwitchParams.topMargin = dp(14);
         root.addView(quickSwitch, quickSwitchParams);
-        Button workTab = button("工时统计");
-        UiStyle.button(this, workTab, true);
-        workTab.setEnabled(false);
-        quickSwitch.addView(workTab, new LinearLayout.LayoutParams(0, dp(48), 1f));
-        Button wageTab = button("工资统计");
-        UiStyle.button(this, wageTab, false);
-        wageTab.setOnClickListener(v -> {
-            Intent intent = new Intent(this, WageActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            startActivity(intent);
-        });
+        workTabButton = button("工时统计");
+        wageTabButton = button("工资统计");
+        quickSwitch.addView(workTabButton, new LinearLayout.LayoutParams(0, dp(48), 1f));
         LinearLayout.LayoutParams wageTabParams = new LinearLayout.LayoutParams(0, dp(48), 1f);
         wageTabParams.leftMargin = dp(8);
-        quickSwitch.addView(wageTab, wageTabParams);
+        quickSwitch.addView(wageTabButton, wageTabParams);
 
-        buildMonthSection(root);
+        workContent = vertical();
+        wageContent = vertical();
+        root.addView(workContent);
+        root.addView(wageContent);
+        wagePanel = new WagePanel(this);
+        wageContent.addView(wagePanel, new LinearLayout.LayoutParams(-1, -2));
+        wageContent.setVisibility(View.GONE);
+        workTabButton.setOnClickListener(v -> showStatsTab(false));
+        wageTabButton.setOnClickListener(v -> showStatsTab(true));
+        showStatsTab(false);
+
+        buildMonthSection(workContent);
 
         TextView statsTitle = text("更多统计", 19, true);
         statsTitle.setPadding(0, dp(24), 0, dp(8));
-        root.addView(statsTitle);
+        workContent.addView(statsTitle);
         LinearLayout statsButtons = horizontal();
-        root.addView(statsButtons);
+        workContent.addView(statsButtons);
         Button weekToggle = button("周统计");
         Button rangeToggle = button("范围统计");
         statsButtons.addView(weekToggle, new LinearLayout.LayoutParams(0, dp(48), 1f));
@@ -144,11 +151,11 @@ public class MainActivity extends Activity {
 
         weekSectionContainer = vertical();
         weekSectionContainer.setVisibility(View.GONE);
-        root.addView(weekSectionContainer);
+        workContent.addView(weekSectionContainer);
         buildWeekSection(weekSectionContainer);
         rangeSectionContainer = vertical();
         rangeSectionContainer.setVisibility(View.GONE);
-        root.addView(rangeSectionContainer);
+        workContent.addView(rangeSectionContainer);
         buildRangeSection(rangeSectionContainer);
         weekToggle.setOnClickListener(v -> {
             boolean show = weekSectionContainer.getVisibility() != View.VISIBLE;
@@ -163,10 +170,21 @@ public class MainActivity extends Activity {
 
         TextView ex = text("本月异常记录", 19, true);
         ex.setPadding(0, dp(24), 0, dp(8));
-        root.addView(ex);
+        workContent.addView(ex);
         exceptionsContainer = vertical();
-        root.addView(exceptionsContainer);
+        workContent.addView(exceptionsContainer);
         return scroll;
+    }
+
+    private void showStatsTab(boolean wage) {
+        if (workContent == null || wageContent == null) return;
+        workContent.setVisibility(wage ? View.GONE : View.VISIBLE);
+        wageContent.setVisibility(wage ? View.VISIBLE : View.GONE);
+        UiStyle.button(this, workTabButton, !wage);
+        UiStyle.button(this, wageTabButton, wage);
+        workTabButton.setEnabled(wage);
+        wageTabButton.setEnabled(!wage);
+        if (wage && wagePanel != null) wagePanel.refresh();
     }
 
     private void buildMonthSection(LinearLayout root) {
