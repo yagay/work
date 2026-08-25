@@ -18,6 +18,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 37
+        run: yes | sdkmanager "platforms;android-37" "build-tools;37.0.0"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -32,5 +38,3 @@ jobs:
           name: WorkHoursApp-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-
-# Triggered by pushes to main.
