@@ -1,0 +1,41 @@
+name: Replace dot separators
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace separators
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          changed = []
+          for p in Path('app/src/main').rglob('*.java'):
+              s = p.read_text()
+              if '·' not in s:
+                  continue
+              n = s.replace('·', '｜')
+              if n != s:
+                  p.write_text(n)
+                  changed.append(str(p))
+          print('changed files:')
+          for p in changed:
+              print(p)
+          PY
+      - name: Commit changes
+        run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/src/main
+            git commit -m "Use vertical bars as app separators"
+            git push
+          fi
