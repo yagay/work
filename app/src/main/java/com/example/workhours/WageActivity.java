@@ -245,11 +245,16 @@ public class WageActivity extends Activity {
     }
 
     private void saveWageSettings() {
-        Float hourly = parseMoney(hourlyRateInput, "请输入正确的时薪");
-        Float monthly = parseMoney(monthlySalaryInput, "请输入正确的月薪");
+        boolean monthlySelected = monthlyMode.isChecked();
+        Float hourly = monthlySelected
+                ? prefs.getFloat(HOURLY_RATE_KEY, 0f)
+                : parseMoney(hourlyRateInput, "请输入正确的时薪");
+        Float monthly = monthlySelected
+                ? parseMoney(monthlySalaryInput, "请输入正确的月薪")
+                : prefs.getFloat(MONTHLY_SALARY_KEY, 0f);
         if (hourly == null || monthly == null) return;
         prefs.edit()
-                .putString(WAGE_MODE_KEY, monthlyMode.isChecked() ? "monthly" : "hourly")
+                .putString(WAGE_MODE_KEY, monthlySelected ? "monthly" : "hourly")
                 .putFloat(HOURLY_RATE_KEY, hourly)
                 .putFloat(MONTHLY_SALARY_KEY, monthly)
                 .apply();
