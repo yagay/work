@@ -58,6 +58,9 @@ public class SettingsActivity extends Activity {
     private TextView previewText;
     private Button workStartDateButton;
     private CheckBox workAlarmCheck;
+    private CheckBox alarmFollowWorkTimeCheck;
+    private EditText alarmTimeInput;
+    private LinearLayout alarmTimeGroup;
     private LocalDate workStartDate;
     private final CheckBox[] restDayChecks = new CheckBox[7];
 
@@ -151,6 +154,24 @@ public class SettingsActivity extends Activity {
         workAlarmCheck.setText("自动设置上班闹钟");
         workAlarmCheck.setTextSize(16);
         root.addView(workAlarmCheck);
+
+        alarmFollowWorkTimeCheck = new CheckBox(this);
+        alarmFollowWorkTimeCheck.setText("闹钟时间跟随上班时间");
+        alarmFollowWorkTimeCheck.setTextSize(16);
+        root.addView(alarmFollowWorkTimeCheck);
+
+        alarmTimeGroup = new LinearLayout(this);
+        alarmTimeGroup.setOrientation(LinearLayout.VERTICAL);
+        TextView alarmTimeLabel = text("自定义闹钟时间（HH:mm）", 15, true);
+        alarmTimeLabel.setPadding(0, dp(4), 0, 0);
+        alarmTimeGroup.addView(alarmTimeLabel);
+        alarmTimeInput = input("例如：07:30", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+        alarmTimeGroup.addView(alarmTimeInput);
+        root.addView(alarmTimeGroup);
+
+        Runnable updateAlarmTimeVisibility = () -> alarmTimeGroup.setVisibility(
+                alarmFollowWorkTimeCheck.isChecked() ? android.view.View.GONE : android.view.View.VISIBLE);
+        alarmFollowWorkTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> updateAlarmTimeVisibility.run());
 
         previewText = text("", 15, true);
         previewText.setPadding(0, dp(12), 0, dp(8));
@@ -443,6 +464,10 @@ public class SettingsActivity extends Activity {
         breakInput.setText(String.valueOf(prefs.getInt(BREAK_MINUTES_KEY, 30)));
         monthlyRestInput.setText(prefs.getString(MONTHLY_REST_DAYS_KEY, ""));
         workAlarmCheck.setChecked(prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false));
+        alarmFollowWorkTimeCheck.setChecked(prefs.getBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, true));
+        alarmTimeInput.setText(prefs.getString(WorkAlarmManager.ALARM_TIME_KEY, "07:30"));
+        alarmTimeGroup.setVisibility(alarmFollowWorkTimeCheck.isChecked()
+                ? android.view.View.GONE : android.view.View.VISIBLE);
 
         workStartDate = null;
         String savedStartDate = prefs.getString(WORK_START_DATE_KEY, "");
@@ -484,6 +509,13 @@ public class SettingsActivity extends Activity {
         int breakMinutes = Integer.parseInt(breakInput.getText().toString().trim());
         String start = normalizeTime(startInput.getText().toString());
         String end = normalizeTime(endInput.getText().toString());
+        boolean followWorkTime = alarmFollowWorkTimeCheck.isChecked();
+        String alarmTime = normalizeTime(alarmTimeInput.getText().toString());
+        if (workAlarmCheck.isChecked() && !followWorkTime && parseTime(alarmTime) == null) {
+            alarmTimeInput.setError("请输入 HH:mm，例如 07:30");
+            return;
+        }
+        if (parseTime(alarmTime) == null) alarmTime = "07:30";
 
         SharedPreferences.Editor editor = prefs.edit()
                 .putString(START_TIME_KEY, start)
@@ -491,7 +523,9 @@ public class SettingsActivity extends Activity {
                 .putInt(BREAK_MINUTES_KEY, breakMinutes)
                 .putFloat("daily_hours", dailyHours)
                 .putString(MONTHLY_REST_DAYS_KEY, monthlyRestDays)
-                .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked());
+                .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked())
+                .putBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, followWorkTime)
+                .putString(WorkAlarmManager.ALARM_TIME_KEY, alarmTime);
 
         if (workStartDate == null) editor.remove(WORK_START_DATE_KEY);
         else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());
@@ -518,6 +552,7 @@ public class SettingsActivity extends Activity {
 
         startInput.setText(start);
         endInput.setText(end);
+        alarmTimeInput.setText(alarmTime);
         monthlyRestInput.setText(monthlyRestDays);
         updatePreview(false);
     }

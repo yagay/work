@@ -23,6 +23,8 @@ import java.util.Set;
 
 public final class WorkAlarmManager {
     public static final String ENABLED_KEY = "work_alarm_enabled";
+    public static final String FOLLOW_WORK_TIME_KEY = "work_alarm_follow_work_time";
+    public static final String ALARM_TIME_KEY = "work_alarm_time";
     public static final String ALARM_LABEL = "上班闹钟（WorkHoursApp）";
 
     private static final String PREFS = "work_hours_prefs";
@@ -47,7 +49,11 @@ public final class WorkAlarmManager {
             return true;
         }
 
-        LocalTime workTime = parseTime(prefs.getString(START_TIME_KEY, "09:00"));
+        boolean followWorkTime = prefs.getBoolean(FOLLOW_WORK_TIME_KEY, true);
+        String rawAlarmTime = followWorkTime
+                ? prefs.getString(START_TIME_KEY, "09:00")
+                : prefs.getString(ALARM_TIME_KEY, "07:30");
+        LocalTime workTime = parseTime(rawAlarmTime);
         if (workTime == null) return false;
 
         LocalDate today = LocalDate.now();
