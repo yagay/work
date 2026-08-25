@@ -1,0 +1,21 @@
+name: Apply dark theme
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/add_dark_theme.py
+      - run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/src/main/java/com/example/workhours/UiStyle.java app/src/main/java/com/example/workhours/AppThemeManager.java app/src/main/java/com/example/workhours/MainActivity.java app/src/main/java/com/example/workhours/SettingsActivity.java app/src/main/java/com/example/workhours/WageActivity.java
+            git commit -m "Add selectable light and dark themes"
+            git push
+          fi
