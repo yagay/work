@@ -133,14 +133,15 @@ public class SettingsActivity extends Activity {
         info.setPadding(0, dp(18), 0, dp(18));
         root.addView(info);
 
-        root.addView(text("工作开始日期（可选）", 17, true));
+        LinearLayout basicSection = createCollapsibleSection(root, "基本工作设置", true);
+        basicSection.addView(text("工作开始日期（可选）", 17, true));
         TextView startDateInfo = text("开始日期之前不会计入工时。", 13, false);
         startDateInfo.setPadding(0, dp(4), 0, dp(8));
-        root.addView(startDateInfo);
+        basicSection.addView(startDateInfo);
 
         LinearLayout dateRow = new LinearLayout(this);
         dateRow.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(dateRow);
+        basicSection.addView(dateRow);
         workStartDateButton = new Button(this);
         UiStyle.button(this, workStartDateButton, false);
         workStartDateButton.setOnClickListener(v -> chooseWorkStartDate());
@@ -155,28 +156,26 @@ public class SettingsActivity extends Activity {
 
         TextView timeTitle = text("每天工作时间", 17, true);
         timeTitle.setPadding(0, dp(24), 0, dp(8));
-        root.addView(timeTitle);
+        basicSection.addView(timeTitle);
         LinearLayout startRow = settingInputRow("上班时间", dp(126));
         startInput = input("09:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
         startRow.addView(startInput, compactInputParams(dp(126)));
-        root.addView(startRow);
+        basicSection.addView(startRow);
 
         LinearLayout endRow = settingInputRow("下班时间", dp(126));
         endInput = input("17:30", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
         endRow.addView(endInput, compactInputParams(dp(126)));
-        root.addView(endRow);
+        basicSection.addView(endRow);
 
         LinearLayout breakRow = settingInputRow("休息时间", dp(126));
         breakInput = input("30", InputType.TYPE_CLASS_NUMBER);
         breakRow.addView(breakInput, compactInputParams(dp(126)));
-        root.addView(breakRow);
+        basicSection.addView(breakRow);
 
-        TextView alarmTitle = text("上班闹钟", 17, true);
-        alarmTitle.setPadding(0, dp(22), 0, dp(4));
-        root.addView(alarmTitle);
+        LinearLayout alarmSection = createCollapsibleSection(root, "上班闹钟", false);
         TextView alarmInfo = text("开启后按本周实际工作日期同步到手机系统时钟。公共假日、请假、手动休息和每月固定休息日会从本周闹钟星期中排除；App 本身不响铃。", 13, false);
         alarmInfo.setPadding(0, 0, 0, dp(4));
-        root.addView(alarmInfo);
+        alarmSection.addView(alarmInfo);
         workAlarmCheck = new CheckBox(this);
         workAlarmCheck.setText("自动设置上班闹钟");
         workAlarmCheck.setTextSize(16);
@@ -185,11 +184,11 @@ public class SettingsActivity extends Activity {
             if (alarmOptionsGroup != null) alarmOptionsGroup.setVisibility(
                     isChecked ? android.view.View.VISIBLE : android.view.View.GONE);
         });
-        root.addView(workAlarmCheck);
+        alarmSection.addView(workAlarmCheck);
 
         alarmOptionsGroup = new LinearLayout(this);
         alarmOptionsGroup.setOrientation(LinearLayout.VERTICAL);
-        root.addView(alarmOptionsGroup);
+        alarmSection.addView(alarmOptionsGroup);
 
         alarmFollowWorkTimeCheck = new CheckBox(this);
         alarmFollowWorkTimeCheck.setText("闹钟时间跟随上班时间");
@@ -217,7 +216,7 @@ public class SettingsActivity extends Activity {
         previewText = text("", 16, true);
         previewText.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         dailyHoursRow.addView(previewText, compactInputParams(dp(126)));
-        root.addView(dailyHoursRow);
+        alarmSection.addView(dailyHoursRow);
         TextWatcher hoursWatcher = new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) { updatePreview(false); }
@@ -227,33 +226,29 @@ public class SettingsActivity extends Activity {
         endInput.addTextChangedListener(hoursWatcher);
         breakInput.addTextChangedListener(hoursWatcher);
 
-        TextView holidayTitle = text("公共假日", 17, true);
-        holidayTitle.setPadding(0, dp(24), 0, dp(6));
-        root.addView(holidayTitle);
+        LinearLayout holidaySection = createCollapsibleSection(root, "公共假日", false);
         TextView holidayInfo = text("选择国家或地区后，公共假日会自动从工时、工资和上班闹钟中排除。", 13, false);
         holidayInfo.setPadding(0, 0, 0, dp(8));
-        root.addView(holidayInfo);
+        holidaySection.addView(holidayInfo);
         holidayRegionButton = new Button(this);
         UiStyle.button(this, holidayRegionButton, false);
         holidayRegionButton.setOnClickListener(v -> chooseHolidayRegion());
-        root.addView(holidayRegionButton, new LinearLayout.LayoutParams(-1, dp(50)));
+        holidaySection.addView(holidayRegionButton, new LinearLayout.LayoutParams(-1, dp(50)));
         TextView holidayHistoryTitle = text("公共假日历史", 14, true);
         holidayHistoryTitle.setPadding(0, dp(10), 0, dp(5));
-        root.addView(holidayHistoryTitle);
+        holidaySection.addView(holidayHistoryTitle);
         holidayHistoryContainer = new LinearLayout(this);
         holidayHistoryContainer.setOrientation(LinearLayout.VERTICAL);
-        root.addView(holidayHistoryContainer);
+        holidaySection.addView(holidayHistoryContainer);
 
-        TextView restRuleTitle = text("休息规则", 17, true);
-        restRuleTitle.setPadding(0, dp(24), 0, dp(8));
-        root.addView(restRuleTitle);
+        LinearLayout restSection = createCollapsibleSection(root, "休息规则", true);
         TextView restRuleInfo = text("每周休息日和每月固定休息日二选一，只会使用当前选中的规则。", 13, false);
         restRuleInfo.setPadding(0, 0, 0, dp(8));
-        root.addView(restRuleInfo);
+        restSection.addView(restRuleInfo);
 
         LinearLayout restModeRow = new LinearLayout(this);
         restModeRow.setOrientation(LinearLayout.HORIZONTAL);
-        root.addView(restModeRow);
+        restSection.addView(restModeRow);
         weeklyRestModeButton = new Button(this);
         weeklyRestModeButton.setText("每周休息日");
         weeklyRestModeButton.setOnClickListener(v -> setRestRuleMode("weekly"));
@@ -269,7 +264,7 @@ public class SettingsActivity extends Activity {
         weeklyRestGroup.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams wrgp = new LinearLayout.LayoutParams(-1, -2);
         wrgp.topMargin = dp(12);
-        root.addView(weeklyRestGroup, wrgp);
+        restSection.addView(weeklyRestGroup, wrgp);
         TextView weeklyInfo = text("点选固定休息日；高亮表示休息。默认周六、周日休息。", 13, false);
         weeklyInfo.setPadding(0, 0, 0, dp(8));
         weeklyRestGroup.addView(weeklyInfo);
@@ -298,7 +293,7 @@ public class SettingsActivity extends Activity {
         monthlyRestGroup.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams mrgp = new LinearLayout.LayoutParams(-1, -2);
         mrgp.topMargin = dp(12);
-        root.addView(monthlyRestGroup, mrgp);
+        restSection.addView(monthlyRestGroup, mrgp);
         TextView monthlyInfo = text("点选日期作为每月固定休息日。月份用于查看日期对应星期和周末；所选日期会每月重复。", 13, false);
         monthlyInfo.setPadding(0, 0, 0, dp(8));
         monthlyRestGroup.addView(monthlyInfo);
@@ -323,12 +318,10 @@ public class SettingsActivity extends Activity {
         monthlyRestGroup.addView(monthlyRestCalendarGrid);
         monthlyRestButton = new Button(this); monthlyRestButton.setVisibility(android.view.View.GONE); monthlyRestGroup.addView(monthlyRestButton);
 
-        TextView wageTitle = text("工资设置", 17, true);
-        wageTitle.setPadding(0, dp(26), 0, dp(6));
-        root.addView(wageTitle);
+        LinearLayout wageSection = createCollapsibleSection(root, "工资设置", false);
         TextView wageInfo = text("工资按生效日期保存历史。修改工资不会重算成新工资；历史日期继续使用当时有效的工资。", 13, false);
         wageInfo.setPadding(0, 0, 0, dp(10));
-        root.addView(wageInfo);
+        wageSection.addView(wageInfo);
 
         LinearLayout currentWageCard = new LinearLayout(this);
         currentWageCard.setOrientation(LinearLayout.VERTICAL);
@@ -340,22 +333,22 @@ public class SettingsActivity extends Activity {
         currentWageCard.addView(currentWageText);
         TextView currentHint = text("按日期自动匹配最近一次已生效的工资记录", 12, false);
         currentWageCard.addView(currentHint);
-        root.addView(currentWageCard);
+        wageSection.addView(currentWageCard);
 
         Button addWageChange = new Button(this);
         addWageChange.setText("＋ 新增工资变更");
         UiStyle.button(this, addWageChange, true);
         LinearLayout.LayoutParams addWageParams = new LinearLayout.LayoutParams(-1, dp(50));
         addWageParams.topMargin = dp(10);
-        root.addView(addWageChange, addWageParams);
+        wageSection.addView(addWageChange, addWageParams);
         addWageChange.setOnClickListener(v -> showAddWageChangeDialog());
 
         TextView historyTitle = text("工资历史", 15, true);
         historyTitle.setPadding(0, dp(14), 0, dp(6));
-        root.addView(historyTitle);
+        wageSection.addView(historyTitle);
         wageHistoryContainer = new LinearLayout(this);
         wageHistoryContainer.setOrientation(LinearLayout.VERTICAL);
-        root.addView(wageHistoryContainer);
+        wageSection.addView(wageHistoryContainer);
 
         Button save = new Button(this);
         UiStyle.button(this, save, true);
@@ -367,18 +360,16 @@ public class SettingsActivity extends Activity {
         root.addView(save, saveParams);
         save.setOnClickListener(v -> save());
 
-        TextView backupTitle = text("数据备份与迁移", 17, true);
-        backupTitle.setPadding(0, dp(28), 0, dp(4));
-        root.addView(backupTitle);
+        LinearLayout backupSection = createCollapsibleSection(root, "数据备份与迁移", false);
         TextView backupInfo = text("导出会保存全部设置、休息规则、请假原因、手动状态和单日上下班时间。可复制到另一台手机后导入恢复。", 13, false);
         backupInfo.setPadding(0, 0, 0, dp(8));
-        root.addView(backupInfo);
+        backupSection.addView(backupInfo);
 
         Button export = new Button(this);
         UiStyle.button(this, export, false);
         export.setText("导出全部数据");
         export.setOnClickListener(v -> exportBackup());
-        root.addView(export, new LinearLayout.LayoutParams(
+        backupSection.addView(export, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
 
         Button importButton = new Button(this);
@@ -387,12 +378,12 @@ public class SettingsActivity extends Activity {
         LinearLayout.LayoutParams importParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
         importParams.topMargin = dp(8);
-        root.addView(importButton, importParams);
+        backupSection.addView(importButton, importParams);
         importButton.setOnClickListener(v -> importBackup());
 
         TextView warning = text("导入会覆盖本机当前 App 数据；导入前建议先导出一份当前备份。", 13, true);
         warning.setPadding(0, dp(8), 0, 0);
-        root.addView(warning);
+        backupSection.addView(warning);
 
         return scroll;
     }
@@ -833,6 +824,36 @@ public class SettingsActivity extends Activity {
                     monthlyRestInput.setText(out.toString());
                     updateMonthlyRestButton();
                 }).show();
+    }
+
+    private LinearLayout createCollapsibleSection(LinearLayout root, String title, boolean expanded) {
+        LinearLayout wrapper = new LinearLayout(this);
+        wrapper.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams wrapperParams = new LinearLayout.LayoutParams(-1, -2);
+        wrapperParams.topMargin = dp(10);
+        root.addView(wrapper, wrapperParams);
+
+        Button header = new Button(this);
+        header.setAllCaps(false);
+        header.setTextSize(16);
+        header.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(14), 0, dp(14), 0);
+        UiStyle.button(this, header, false);
+        wrapper.addView(header, new LinearLayout.LayoutParams(-1, dp(50)));
+
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(4), dp(8), dp(4), dp(6));
+        wrapper.addView(content, new LinearLayout.LayoutParams(-1, -2));
+
+        final boolean[] open = {expanded};
+        Runnable paint = () -> {
+            content.setVisibility(open[0] ? android.view.View.VISIBLE : android.view.View.GONE);
+            header.setText((open[0] ? "▼  " : "▶  ") + title);
+        };
+        header.setOnClickListener(v -> { open[0] = !open[0]; paint.run(); });
+        paint.run();
+        return content;
     }
 
     private LinearLayout settingInputRow(String label, int inputWidth) {
