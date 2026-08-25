@@ -440,9 +440,6 @@ public class WagePanel extends LinearLayout {
         LocalDate ws = getWorkStartDate();
         YearMonth first = ws == null ? null : YearMonth.from(ws);
         if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
-        previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first));
-        nextMonthButton.setEnabled(displayedMonth.isBefore(now));
-        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n点击选择月份");
         LocalDate start = displayedMonth.atDay(1);
         if (ws != null && start.isBefore(ws)) start = ws;
         LocalDate end = displayedMonth.equals(now) ? LocalDate.now() : displayedMonth.atEndOfMonth();
