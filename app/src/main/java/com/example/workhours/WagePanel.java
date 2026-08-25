@@ -524,7 +524,7 @@ public class WagePanel extends LinearLayout {
         e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         e.setTextSize(18);
         e.setHint(hint);
-        UiStyle.input(this, e);
+        UiStyle.input(host, e);
         return e;
     }
 
