@@ -66,7 +66,10 @@ public class WagePanel extends LinearLayout {
     private Button nextWeekButton;
     private Button previousWeekButton;
     private Button selectedDateButton;
+    private Button rangeStartButton;
+    private Button rangeEndButton;
     private TextView daySummary;
+    private LinearLayout dayDetails;
     private CheckBox deductCheck;
     private LinearLayout weekContent;
     private LinearLayout dayContent;
@@ -78,6 +81,8 @@ public class WagePanel extends LinearLayout {
     private YearMonth displayedMonth;
     private LocalDate displayedWeekStart;
     private LocalDate selectedDate;
+    private LocalDate rangeStartDate;
+    private LocalDate rangeEndDate;
 
     public WagePanel(Activity host) {
         super(host);
@@ -88,6 +93,8 @@ public class WagePanel extends LinearLayout {
         displayedMonth = YearMonth.from(today);
         displayedWeekStart = mondayOf(today);
         selectedDate = today;
+        rangeStartDate = mondayOf(today);
+        rangeEndDate = today;
         buildUi();
         loadSettings();
         refreshAll();
@@ -177,6 +184,8 @@ public class WagePanel extends LinearLayout {
         weekNav.addView(previousWeekButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
         weekTitle = text("", 17, true);
         weekTitle.setGravity(Gravity.CENTER);
+        weekTitle.setPadding(dp(8), dp(12), dp(8), dp(12));
+        weekTitle.setOnClickListener(v -> chooseWeek());
         weekNav.addView(weekTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         nextWeekButton = button("›");
         nextWeekButton.setTextSize(24);
@@ -193,18 +202,29 @@ public class WagePanel extends LinearLayout {
         weekDetails = vertical();
         weekCard.addView(weekDetails);
 
-        TextView daySection = text("按日期查看工资", 19, true);
+        TextView daySection = text("按日期范围查看工资", 19, true);
         daySection.setPadding(0, dp(18), 0, dp(8));
         dayContent.addView(daySection);
-        selectedDateButton = button("");
-        selectedDateButton.setOnClickListener(v -> chooseDate());
-        dayContent.addView(selectedDateButton, new LinearLayout.LayoutParams(-1, dp(50)));
+        LinearLayout rangeRow = horizontal();
+        rangeRow.setGravity(Gravity.CENTER_VERTICAL);
+        dayContent.addView(rangeRow);
+        rangeStartButton = button("");
+        rangeStartButton.setOnClickListener(v -> chooseRangeDate(true));
+        rangeRow.addView(rangeStartButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
+        TextView rangeTo = text(" 至 ", 15, true);
+        rangeTo.setGravity(Gravity.CENTER);
+        rangeRow.addView(rangeTo, new LinearLayout.LayoutParams(dp(42), dp(50)));
+        rangeEndButton = button("");
+        rangeEndButton.setOnClickListener(v -> chooseRangeDate(false));
+        rangeRow.addView(rangeEndButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
         LinearLayout dayCard = card();
         LinearLayout.LayoutParams dayCardParams = new LinearLayout.LayoutParams(-1, -2);
         dayCardParams.topMargin = dp(10);
         dayContent.addView(dayCard, dayCardParams);
         daySummary = text("", 16, true);
         dayCard.addView(daySummary);
+        dayDetails = vertical();
+        dayCard.addView(dayDetails);
         TextView dayHint = text("扣工资请回到工时统计后点击对应日期修改。", 13, false);
         dayHint.setPadding(0, dp(10), 0, 0);
         dayCard.addView(dayHint);
@@ -293,12 +313,32 @@ public class WagePanel extends LinearLayout {
         }
     }
 
-    private void chooseDate() {
-        LocalDate today = LocalDate.now();
+    private void chooseWeek() {
+        LocalDate initial = displayedWeekStart;
         DatePickerDialog dialog = new DatePickerDialog(host, (view, y, m, d) -> {
-            selectedDate = LocalDate.of(y, m + 1, d);
+            LocalDate picked = LocalDate.of(y, m + 1, d);
+            displayedWeekStart = mondayOf(picked);
+            refreshWeek();
+        }, initial.getYear(), initial.getMonthValue() - 1, initial.getDayOfMonth());
+        dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
+        LocalDate ws = getWorkStartDate();
+        if (ws != null) dialog.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+        dialog.show();
+    }
+
+    private void chooseRangeDate(boolean startDate) {
+        LocalDate initial = startDate ? rangeStartDate : rangeEndDate;
+        DatePickerDialog dialog = new DatePickerDialog(host, (view, y, m, d) -> {
+            LocalDate picked = LocalDate.of(y, m + 1, d);
+            if (startDate) {
+                rangeStartDate = picked;
+                if (rangeEndDate.isBefore(rangeStartDate)) rangeEndDate = rangeStartDate;
+            } else {
+                rangeEndDate = picked;
+                if (rangeStartDate.isAfter(rangeEndDate)) rangeStartDate = rangeEndDate;
+            }
             refreshDay();
-        }, selectedDate.getYear(), selectedDate.getMonthValue() - 1, selectedDate.getDayOfMonth());
+        }, initial.getYear(), initial.getMonthValue() - 1, initial.getDayOfMonth());
         dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
         LocalDate ws = getWorkStartDate();
         if (ws != null) dialog.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
@@ -317,6 +357,8 @@ public class WagePanel extends LinearLayout {
     private void refreshAll() {
         LocalDate ws = getWorkStartDate();
         if (ws != null && selectedDate.isBefore(ws)) selectedDate = ws;
+        if (ws != null && rangeStartDate.isBefore(ws)) rangeStartDate = ws;
+        if (rangeEndDate.isBefore(rangeStartDate)) rangeEndDate = rangeStartDate;
         refreshWeek();
         refreshDay();
         refreshMonth();
@@ -339,17 +381,43 @@ public class WagePanel extends LinearLayout {
     }
 
     private void refreshDay() {
-        if (selectedDateButton == null || daySummary == null) return;
-        selectedDateButton.setText(selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd E", Locale.CHINA)));
-        float hours = getHours(selectedDate);
-        float before = getWageBeforeDeduction(selectedDate);
-        float after = getWageForDate(selectedDate);
-        String status = getDayStatus(selectedDate);
-        daySummary.setText("状态：" + status
-                + "\n工时：" + formatHours(hours)
-                + "\n扣除前工资：" + money(before)
-                + (isDeducted(selectedDate) ? "\n本日已标记扣工资：-" + money(before) : "")
-                + "\n实际工资：" + money(after));
+        if (rangeStartButton == null || rangeEndButton == null || daySummary == null || dayDetails == null) return;
+        LocalDate today = LocalDate.now();
+        LocalDate ws = getWorkStartDate();
+        if (rangeEndDate.isAfter(today)) rangeEndDate = today;
+        if (ws != null && rangeStartDate.isBefore(ws)) rangeStartDate = ws;
+        if (rangeStartDate.isAfter(rangeEndDate)) rangeEndDate = rangeStartDate;
+
+        DateTimeFormatter buttonFormat = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        rangeStartButton.setText("开始\n" + rangeStartDate.format(buttonFormat));
+        rangeEndButton.setText("结束\n" + rangeEndDate.format(buttonFormat));
+        dayDetails.removeAllViews();
+
+        float hours = 0f, wage = 0f, deduction = 0f;
+        int workDays = 0, deductionDays = 0;
+        DateTimeFormatter rowFormat = DateTimeFormatter.ofPattern("M月d日 E", Locale.CHINA);
+        for (LocalDate d = rangeStartDate; !d.isAfter(rangeEndDate); d = d.plusDays(1)) {
+            float h = getHours(d);
+            float before = getWageBeforeDeduction(d);
+            float after = getWageForDate(d);
+            hours += h;
+            wage += after;
+            if (h > 0) workDays++;
+            if (isDeducted(d)) { deduction += before; deductionDays++; }
+            if (h > 0 || before > 0 || isDeducted(d) || isLeave(d) || isBankHoliday(d) || isManualRest(d)) {
+                TextView row = text(d.format(rowFormat) + " ｜ " + getDayStatus(d)
+                        + " ｜ " + formatHours(h) + " ｜ " + money(after)
+                        + (isDeducted(d) ? " ｜ 已扣工资" : ""), 13, isDeducted(d));
+                row.setPadding(0, dp(4), 0, dp(4));
+                dayDetails.addView(row);
+            }
+        }
+        long days = java.time.temporal.ChronoUnit.DAYS.between(rangeStartDate, rangeEndDate) + 1;
+        daySummary.setText("日期范围：" + rangeStartDate.format(buttonFormat) + " 至 " + rangeEndDate.format(buttonFormat)
+                + "（" + days + "天）"
+                + "\n总工时：" + formatHours(hours) + " ｜ 工作：" + workDays + "天"
+                + "\n总工资：" + money(wage) + " ｜ 已扣：" + money(deduction)
+                + " ｜ 扣工资：" + deductionDays + "天");
     }
 
     private void refreshWeek() {
@@ -366,7 +434,7 @@ public class WagePanel extends LinearLayout {
         if (ws != null && effectiveStart.isBefore(ws)) effectiveStart = ws;
         LocalDate effectiveEnd = end.isAfter(today) ? today : end;
         DateTimeFormatter f = DateTimeFormatter.ofPattern("M月d日");
-        weekTitle.setText(displayedWeekStart.format(f) + " - " + end.format(f));
+        weekTitle.setText(displayedWeekStart.format(f) + " - " + end.format(f) + "\n点击选择星期");
         weekDetails.removeAllViews();
         if (effectiveStart.isAfter(effectiveEnd)) {
             weekSummary.setText("本周尚未开始工作");
