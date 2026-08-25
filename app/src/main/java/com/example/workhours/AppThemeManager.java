@@ -2,11 +2,7 @@ package com.example.workhours;
 
 import android.app.Activity;
 import android.content.Context;
-import android.content.SharedPreferences;
 import android.content.res.Configuration;
-import android.graphics.Color;
-import android.view.Window;
-import android.view.WindowInsetsController;
 
 final class AppThemeManager {
     static final String KEY = "app_theme";
@@ -18,7 +14,8 @@ final class AppThemeManager {
     private AppThemeManager() { }
 
     static String mode(Context context) {
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, SYSTEM);
+        String mode = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, SYSTEM);
+        return mode == null ? SYSTEM : mode;
     }
 
     static void setMode(Context context, String mode) {
@@ -37,15 +34,6 @@ final class AppThemeManager {
     static boolean apply(Activity activity) {
         boolean dark = isDark(activity);
         UiStyle.applyDark(dark);
-        Window window = activity.getWindow();
-        window.setStatusBarColor(UiStyle.PAGE_BG);
-        window.setNavigationBarColor(UiStyle.PAGE_BG);
-        WindowInsetsController controller = window.getInsetsController();
-        if (controller != null) {
-            int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
-                    | WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
-            controller.setSystemBarsAppearance(dark ? 0 : mask, mask);
-        }
         return dark;
     }
 
