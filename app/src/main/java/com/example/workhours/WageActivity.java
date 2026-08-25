@@ -99,6 +99,7 @@ public class WageActivity extends Activity {
         LinearLayout root = vertical();
         root.setPadding(dp(18), dp(22), dp(18), dp(28));
         scroll.addView(root);
+        UiStyle.page(scroll);
 
         LinearLayout top = horizontal();
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -143,6 +144,7 @@ public class WageActivity extends Activity {
         modes.setOnCheckedChangeListener((group, checkedId) -> updateWageModeVisibility());
 
         Button save = button("保存工资设置");
+        UiStyle.button(this, save, true);
         save.setOnClickListener(v -> saveWageSettings());
         root.addView(save, new LinearLayout.LayoutParams(-1, dp(52)));
 
@@ -164,6 +166,7 @@ public class WageActivity extends Activity {
         deductCheck.setTextSize(15);
         dayCard.addView(deductCheck);
         Button saveDeduction = button("保存这一天的扣工资设置");
+        UiStyle.button(this, saveDeduction, true);
         saveDeduction.setOnClickListener(v -> saveDeduction());
         dayCard.addView(saveDeduction, new LinearLayout.LayoutParams(-1, dp(48)));
 
@@ -565,14 +568,14 @@ public class WageActivity extends Activity {
         e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         e.setTextSize(18);
         e.setHint(hint);
-        e.setPadding(dp(12), dp(8), dp(12), dp(8));
+        UiStyle.input(this, e);
         return e;
     }
 
     private LinearLayout card() {
         LinearLayout l = vertical();
-        l.setPadding(dp(14), dp(12), dp(14), dp(12));
-        l.setBackgroundColor(0xFFF8F9FA);
+        l.setPadding(dp(16), dp(15), dp(16), dp(15));
+        UiStyle.card(this, l);
         return l;
     }
 
@@ -586,9 +589,9 @@ public class WageActivity extends Activity {
     }
     private LinearLayout vertical() { LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.VERTICAL); return l; }
     private LinearLayout horizontal() { LinearLayout l = new LinearLayout(this); l.setOrientation(LinearLayout.HORIZONTAL); return l; }
-    private Button button(String s) { Button b = new Button(this); b.setText(s); return b; }
+    private Button button(String s) { Button b = new Button(this); b.setText(s); UiStyle.button(this,b,false); return b; }
     private TextView text(String s, int sp, boolean bold) {
-        TextView v = new TextView(this); v.setText(s); v.setTextSize(sp); v.setTextColor(0xFF202124);
+        TextView v = new TextView(this); v.setText(s); v.setTextSize(sp); v.setTextColor(UiStyle.TEXT);
         if (bold) v.setTypeface(Typeface.DEFAULT, Typeface.BOLD); return v;
     }
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }

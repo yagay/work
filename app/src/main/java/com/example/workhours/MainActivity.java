@@ -95,12 +95,14 @@ public class MainActivity extends Activity {
         LinearLayout root = vertical();
         root.setPadding(dp(18), dp(22), dp(18), dp(28));
         scroll.addView(root);
+        UiStyle.page(scroll);
 
         LinearLayout top = horizontal();
         top.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(top);
         top.addView(text("上班总时间", 26, true), new LinearLayout.LayoutParams(0, -2, 1f));
         Button settings = button("设置");
+        UiStyle.button(this, settings, true);
         settings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         top.addView(settings, new LinearLayout.LayoutParams(dp(86), dp(48)));
 
@@ -170,7 +172,7 @@ public class MainActivity extends Activity {
         rangeStartButton = button(""); rangeStartButton.setOnClickListener(v -> showDatePicker(true)); row.addView(rangeStartButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
         TextView to = text(" 至 ", 14, false); to.setGravity(Gravity.CENTER); row.addView(to, new LinearLayout.LayoutParams(dp(38), dp(50)));
         rangeEndButton = button(""); rangeEndButton.setOnClickListener(v -> showDatePicker(false)); row.addView(rangeEndButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
-        Button calc = button("统计这段时间"); calc.setOnClickListener(v -> calculateRange()); LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, dp(50)); cp.topMargin = dp(8); root.addView(calc, cp);
+        Button calc = button("统计这段时间"); UiStyle.button(this, calc, true); calc.setOnClickListener(v -> calculateRange()); LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, dp(50)); cp.topMargin = dp(8); root.addView(calc, cp);
         LinearLayout c = card(); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(8); root.addView(c, p); rangeSummaryText = text("", 16, true); c.addView(rangeSummaryText); rangeDetailsContainer = vertical(); c.addView(rangeDetailsContainer);
     }
 
@@ -212,7 +214,7 @@ public class MainActivity extends Activity {
             boolean holiday=!before&&isBankHoliday(d), leave=!holiday&&!before&&isLeave(d), manualRest=!holiday&&!leave&&!before&&isManualRest(d), configured=!before&&isConfiguredWorkDay(d)&&!holiday, override=!holiday&&!leave&&!manualRest&&!before&&hasOverride(d), autoRest=!holiday&&!leave&&!manualRest&&!override&&!before&&!configured;
             float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured), overtime=(future||before)?0:getOvertimeHours(d), total=normal+overtime;
             LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);cell.setPadding(dp(2),dp(6),dp(2),dp(5));
-            if(d.equals(today))cell.setBackgroundColor(0xFFE8F0FE);else if(leave)cell.setBackgroundColor(0xFFEAF2FF);else if(overtime>0)cell.setBackgroundColor(0xFFE8F5E9);else if(override)cell.setBackgroundColor(0xFFFFF4E5);else if(holiday)cell.setBackgroundColor(0xFFFFEBEE);else if(autoRest||manualRest||weekend)cell.setBackgroundColor(0xFFF1F3F4);
+            if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,0xFFE8F0FE,12,0xFFB8C8FF,1));else if(leave)cell.setBackground(UiStyle.roundRect(this,0xFFFFF0F0,12,0xFFF2CACA,1));else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,0xFFF1F8F3,12,0xFFCDE7D4,1));else if(override)cell.setBackground(UiStyle.roundRect(this,0xFFFFF7E8,12,0xFFF1D8A6,1));else if(holiday)cell.setBackground(UiStyle.roundRect(this,0xFFFFF2F4,12,0xFFF3CDD3,1));else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,0xFFF4F6F9,12,0xFFE1E6EE,1));
             TextView dt=text(String.valueOf(day),14,d.equals(today));dt.setGravity(Gravity.CENTER);if(future||before)dt.setTextColor(0xFF9AA0A6);cell.addView(dt);
             String status=""; if(before)status="未开始";else if(!future){if(holiday)status="公共假日";else if(leave)status="请假";else if(manualRest||autoRest)status=overtime>0?"加班 "+shortHours(overtime):"休息";else if(total>0)status=shortHours(total)+(overtime>0?" 加班":"");}
             TextView st=text(status,10,leave||holiday||manualRest||override||autoRest||overtime>0);st.setGravity(Gravity.CENTER);cell.addView(st);
@@ -298,6 +300,6 @@ public class MainActivity extends Activity {
     private LocalDate easterSunday(int y){int a=y%19,b=y/100,c=y%100,d=b/4,e=b%4,f=(b+8)/25,g=(b-f+1)/3,h=(19*a+b-d-g+15)%30,i=c/4,k=c%4,l=(32+2*e+2*i-h-k)%7,m=(a+11*h+22*l)/451,mo=(h+l-7*m+114)/31,da=((h+l-7*m+114)%31)+1;return LocalDate.of(y,mo,da);}
     private String formatDurationHours(float h){int m=Math.round(h*60),hh=m/60,mm=m%60;if(mm==0)return hh+" 小时";if(hh==0)return mm+" 分钟";return hh+" 小时 "+mm+" 分钟";} private String shortHours(float h){int m=Math.round(h*60);return m%60==0?(m/60)+"h":String.format(Locale.US,"%.1fh",h);}
     private TextView statLineText(){TextView v=text("",15,true);v.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);v.setSingleLine(true);v.setPadding(dp(4),dp(2),dp(4),dp(2));return v;}
-    private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;} private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;} private LinearLayout card(){LinearLayout l=vertical();l.setPadding(dp(14),dp(12),dp(14),dp(12));l.setBackgroundColor(0xFFF8F9FA);return l;} private Button button(String s){Button b=new Button(this);b.setText(s);return b;} private TextView text(String s,int sp,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(sp);v.setTextColor(0xFF202124);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
+    private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;} private LinearLayout horizontal(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.HORIZONTAL);return l;} private LinearLayout card(){LinearLayout l=vertical();l.setPadding(dp(16),dp(15),dp(16),dp(15));UiStyle.card(this,l);return l;} private Button button(String s){Button b=new Button(this);b.setText(s);UiStyle.button(this,b,false);return b;} private TextView text(String s,int sp,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(sp);v.setTextColor(UiStyle.TEXT);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
     private GridLayout.LayoutParams gridParams(){GridLayout.LayoutParams p=new GridLayout.LayoutParams();p.width=0;p.height=dp(58);p.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);p.setMargins(dp(1),dp(1),dp(1),dp(1));return p;} private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }

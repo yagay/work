@@ -74,6 +74,7 @@ public class SettingsActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(20), dp(24), dp(20), dp(28));
         scroll.addView(root);
+        UiStyle.page(scroll);
 
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
@@ -83,6 +84,7 @@ public class SettingsActivity extends Activity {
         Button back = new Button(this);
         back.setText("‹");
         back.setTextSize(24);
+        UiStyle.navButton(this, back);
         back.setOnClickListener(v -> finish());
         top.addView(back, new LinearLayout.LayoutParams(dp(58), dp(48)));
         TextView title = text("工作时间设置", 24, true);
@@ -102,9 +104,11 @@ public class SettingsActivity extends Activity {
         dateRow.setOrientation(LinearLayout.HORIZONTAL);
         root.addView(dateRow);
         workStartDateButton = new Button(this);
+        UiStyle.button(this, workStartDateButton, false);
         workStartDateButton.setOnClickListener(v -> chooseWorkStartDate());
         dateRow.addView(workStartDateButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
         Button clearDate = new Button(this);
+        UiStyle.button(this, clearDate, false);
         clearDate.setText("清除");
         clearDate.setOnClickListener(v -> confirmClearWorkStartDate());
         LinearLayout.LayoutParams clearParams = new LinearLayout.LayoutParams(dp(86), dp(50));
@@ -132,6 +136,7 @@ public class SettingsActivity extends Activity {
         previewText.setPadding(0, dp(12), 0, dp(8));
         root.addView(previewText);
         Button preview = new Button(this);
+        UiStyle.button(this, preview, false);
         preview.setText("计算每天工时");
         preview.setOnClickListener(v -> updatePreview(true));
         root.addView(preview, new LinearLayout.LayoutParams(
@@ -161,6 +166,7 @@ public class SettingsActivity extends Activity {
         root.addView(monthlyRestInput);
 
         Button save = new Button(this);
+        UiStyle.button(this, save, true);
         save.setText("保存设置");
         save.setTextSize(16);
         LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
@@ -177,12 +183,14 @@ public class SettingsActivity extends Activity {
         root.addView(backupInfo);
 
         Button export = new Button(this);
+        UiStyle.button(this, export, false);
         export.setText("导出全部数据");
         export.setOnClickListener(v -> exportBackup());
         root.addView(export, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52)));
 
         Button importButton = new Button(this);
+        UiStyle.button(this, importButton, false);
         importButton.setText("导入 / 恢复数据");
         LinearLayout.LayoutParams importParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(52));
@@ -405,7 +413,7 @@ public class SettingsActivity extends Activity {
         view.setInputType(type);
         view.setTextSize(18);
         view.setHint(hint);
-        view.setPadding(dp(12), dp(8), dp(12), dp(8));
+        UiStyle.input(this, view);
         return view;
     }
 
@@ -570,7 +578,7 @@ public class SettingsActivity extends Activity {
         TextView view = new TextView(this);
         view.setText(value);
         view.setTextSize(sp);
-        view.setTextColor(0xFF202124);
+        view.setTextColor(UiStyle.TEXT);
         if (bold) view.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         return view;
     }
