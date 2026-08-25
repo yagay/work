@@ -58,13 +58,13 @@ public class MainActivity extends Activity {
     private YearMonth displayedMonth;
     private LocalDate displayedWeekStart;
     private LocalDate rangeStart, rangeEnd;
-    private TextView monthTitle, totalHoursText, statusStatsText;
+    private TextView monthTitle, totalHoursText, totalWageText, statusStatsText;
     private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
     private GridLayout calendarGrid;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
     private LinearLayout monthSectionContainer, weekSectionContainer, rangeSectionContainer;
     private LinearLayout workContent, wageContent;
-    private Button workWeekTabButton, workDateTabButton, workMonthTabButton;
+    private Button workWeekTabButton, workDateTabButton;
     private Button workTabButton, wageTabButton;
     private WagePanel wagePanel;
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
@@ -88,7 +88,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (calendarGrid == null) return;
+        if (monthTitle == null) return;
         LocalDate ws = getWorkStartDate();
         if (ws != null) {
             if (rangeStart.isBefore(ws)) rangeStart = ws;
@@ -114,6 +114,8 @@ public class MainActivity extends Activity {
         UiStyle.button(this, settings, true);
         settings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         top.addView(settings, new LinearLayout.LayoutParams(dp(86), dp(48)));
+
+        buildSharedMonthSummary(root);
 
         LinearLayout quickSwitch = horizontal();
         LinearLayout.LayoutParams quickSwitchParams = new LinearLayout.LayoutParams(
@@ -144,52 +146,33 @@ public class MainActivity extends Activity {
         workContent.addView(workViewTabs, workViewTabsParams);
         workWeekTabButton = button("星期");
         workDateTabButton = button("日期");
-        workMonthTabButton = button("月份");
         workViewTabs.addView(workWeekTabButton, new LinearLayout.LayoutParams(0, dp(46), 1f));
         LinearLayout.LayoutParams workDateTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
         workDateTabParams.leftMargin = dp(6);
         workViewTabs.addView(workDateTabButton, workDateTabParams);
-        LinearLayout.LayoutParams workMonthTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
-        workMonthTabParams.leftMargin = dp(6);
-        workViewTabs.addView(workMonthTabButton, workMonthTabParams);
 
         weekSectionContainer = vertical();
         rangeSectionContainer = vertical();
-        monthSectionContainer = vertical();
         workContent.addView(weekSectionContainer);
         workContent.addView(rangeSectionContainer);
-        workContent.addView(monthSectionContainer);
-
         buildWeekSection(weekSectionContainer);
         buildRangeSection(rangeSectionContainer);
-        buildMonthSection(monthSectionContainer);
-        TextView ex = text("本月异常记录", 19, true);
-        ex.setPadding(0, dp(24), 0, dp(8));
-        monthSectionContainer.addView(ex);
-        exceptionsContainer = vertical();
-        monthSectionContainer.addView(exceptionsContainer);
 
         workWeekTabButton.setOnClickListener(v -> showWorkViewTab(0));
         workDateTabButton.setOnClickListener(v -> showWorkViewTab(1));
-        workMonthTabButton.setOnClickListener(v -> showWorkViewTab(2));
-        showWorkViewTab(2);
+        showWorkViewTab(0);
         return scroll;
     }
 
     private void showWorkViewTab(int tab) {
-        if (weekSectionContainer == null || rangeSectionContainer == null || monthSectionContainer == null) return;
+        if (weekSectionContainer == null || rangeSectionContainer == null) return;
         weekSectionContainer.setVisibility(tab == 0 ? View.VISIBLE : View.GONE);
         rangeSectionContainer.setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
-        monthSectionContainer.setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
         UiStyle.button(this, workWeekTabButton, tab == 0);
         UiStyle.button(this, workDateTabButton, tab == 1);
-        UiStyle.button(this, workMonthTabButton, tab == 2);
         workWeekTabButton.setEnabled(tab != 0);
         workDateTabButton.setEnabled(tab != 1);
-        workMonthTabButton.setEnabled(tab != 2);
-        if (tab == 0) refreshWeek();
-        else if (tab == 1) calculateRange();
-        else refreshMonth();
+        if (tab == 0) refreshWeek(); else calculateRange();
     }
 
     private void showStatsTab(boolean wage) {
@@ -200,44 +183,36 @@ public class MainActivity extends Activity {
         UiStyle.button(this, wageTabButton, wage);
         workTabButton.setEnabled(wage);
         wageTabButton.setEnabled(!wage);
-        if (wage && wagePanel != null) wagePanel.refresh();
+        if (wage && wagePanel != null) { wagePanel.setDisplayedMonth(displayedMonth); wagePanel.refresh(); }
     }
 
-    private void buildMonthSection(LinearLayout root) {
+    private void buildSharedMonthSummary(LinearLayout root) {
         LinearLayout nav = horizontal();
         nav.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, dp(54));
+        LinearLayout.LayoutParams np = new LinearLayout.LayoutParams(-1, dp(58));
         np.topMargin = dp(14);
         root.addView(nav, np);
         previousMonthButton = button("‹");
         previousMonthButton.setTextSize(24);
-        previousMonthButton.setOnClickListener(v -> {
-            YearMonth target = displayedMonth.minusMonths(1);
-            LocalDate ws = getWorkStartDate();
-            if (ws == null || !target.isBefore(YearMonth.from(ws))) { displayedMonth = target; refreshMonth(); }
-        });
-        nav.addView(previousMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-        monthTitle = text("", 18, true); monthTitle.setGravity(Gravity.CENTER);
-        monthTitle.setPadding(dp(8), dp(12), dp(8), dp(12));
-        monthTitle.setOnClickListener(v -> chooseWorkMonth());
-        nav.addView(monthTitle, new LinearLayout.LayoutParams(0, -2, 1f));
-        nextMonthButton = button("›"); nextMonthButton.setTextSize(24);
-        nextMonthButton.setOnClickListener(v -> { if (displayedMonth.isBefore(YearMonth.now())) { displayedMonth = displayedMonth.plusMonths(1); refreshMonth(); }});
-        nav.addView(nextMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
+        previousMonthButton.setOnClickListener(v -> { YearMonth target=displayedMonth.minusMonths(1); LocalDate ws=getWorkStartDate(); if(ws==null||!target.isBefore(YearMonth.from(ws))){displayedMonth=target;refreshMonth();}});
+        nav.addView(previousMonthButton,new LinearLayout.LayoutParams(dp(58),dp(48)));
+        monthTitle=text("",18,true); monthTitle.setGravity(Gravity.CENTER); monthTitle.setPadding(dp(8),dp(10),dp(8),dp(10)); monthTitle.setOnClickListener(v->chooseWorkMonth());
+        nav.addView(monthTitle,new LinearLayout.LayoutParams(0,-2,1f));
+        nextMonthButton=button("›"); nextMonthButton.setTextSize(24); nextMonthButton.setOnClickListener(v->{if(displayedMonth.isBefore(YearMonth.now())){displayedMonth=displayedMonth.plusMonths(1);refreshMonth();}});
+        nav.addView(nextMonthButton,new LinearLayout.LayoutParams(dp(58),dp(48)));
 
-        LinearLayout card = card(); root.addView(card);
-        card.addView(text("本月总工时（含加班）", 13, false));
-        totalHoursText = text("", 32, true); totalHoursText.setPadding(0, dp(3), 0, dp(10)); card.addView(totalHoursText);
-
-        statusStatsText = statLineText();
-        statusStatsText.setTextSize(13);
-        statusStatsText.setGravity(Gravity.CENTER);
-        card.addView(statusStatsText);
-
-        TextView ct = text("月历", 19, true); ct.setPadding(0, dp(22), 0, dp(8)); root.addView(ct);
-        calendarGrid = new GridLayout(this); calendarGrid.setColumnCount(7); calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS); root.addView(calendarGrid);
-        TextView hint = text("点击日期可修改上下班时间、请假/休息，并可设置加班开始和结束时间。", 13, false);
-        hint.setPadding(0, dp(8), 0, 0); root.addView(hint);
+        LinearLayout cards=horizontal();
+        root.addView(cards,new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout hoursCard=card();
+        hoursCard.addView(text("本月工时",13,false));
+        totalHoursText=text("",25,true); totalHoursText.setPadding(0,dp(4),0,dp(4)); hoursCard.addView(totalHoursText);
+        statusStatsText=statLineText(); statusStatsText.setTextSize(11); statusStatsText.setSingleLine(false); hoursCard.addView(statusStatsText);
+        cards.addView(hoursCard,new LinearLayout.LayoutParams(0,-2,1f));
+        LinearLayout wageCard=card();
+        wageCard.addView(text("本月工资",13,false));
+        totalWageText=text("£0.00",25,true); totalWageText.setPadding(0,dp(4),0,dp(4)); wageCard.addView(totalWageText);
+        TextView wageHint=text("点击工资统计查看明细",11,false); wageCard.addView(wageHint);
+        LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(0,-2,1f); wp.leftMargin=dp(8); cards.addView(wageCard,wp);
     }
 
     private void buildWeekSection(LinearLayout root) {
@@ -268,15 +243,14 @@ public class MainActivity extends Activity {
     private void refreshAll() { updateRangeButtons(); refreshMonth(); refreshWeek(); calculateRange(); }
 
     private void refreshMonth() {
-        LocalDate today = LocalDate.now(); YearMonth now = YearMonth.from(today); LocalDate ws = getWorkStartDate(); YearMonth first = ws == null ? null : YearMonth.from(ws);
-        if (displayedMonth.isAfter(now)) displayedMonth = now; if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
-        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n点击选择月份");
-        previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first)); nextMonthButton.setEnabled(displayedMonth.isBefore(now));
-        LocalDate start = displayedMonth.atDay(1); if (ws != null && start.isBefore(ws)) start = ws; LocalDate end = displayedMonth.equals(now) ? today : displayedMonth.atEndOfMonth();
-        Stats s = collectStats(start, end); totalHoursText.setText(formatDurationHours(s.totalHours));
-        statusStatsText.setText(StatusStatsFormatter.format(
-                s.workDays, s.leaveDays, s.holidayDays, s.restDays));
-        rebuildCalendar(today); rebuildExceptions(end);
+        LocalDate today=LocalDate.now(); YearMonth now=YearMonth.from(today); LocalDate ws=getWorkStartDate(); YearMonth first=ws==null?null:YearMonth.from(ws);
+        if(displayedMonth.isAfter(now))displayedMonth=now; if(first!=null&&displayedMonth.isBefore(first))displayedMonth=first;
+        monthTitle.setText(displayedMonth.getYear()+"年"+displayedMonth.getMonthValue()+"月\n点击选择月份");
+        previousMonthButton.setEnabled(first==null||displayedMonth.isAfter(first)); nextMonthButton.setEnabled(displayedMonth.isBefore(now));
+        LocalDate start=displayedMonth.atDay(1); if(ws!=null&&start.isBefore(ws))start=ws; LocalDate end=displayedMonth.equals(now)?today:displayedMonth.atEndOfMonth();
+        Stats st=collectStats(start,end); totalHoursText.setText(formatDurationHours(st.totalHours));
+        statusStatsText.setText(StatusStatsFormatter.format(st.workDays,st.leaveDays,st.holidayDays,st.restDays));
+        if(wagePanel!=null){ wagePanel.setDisplayedMonth(displayedMonth); totalWageText.setText(String.format(Locale.UK,"£%.2f",wagePanel.getDisplayedMonthWage())); }
     }
 
     private void refreshWeek() {

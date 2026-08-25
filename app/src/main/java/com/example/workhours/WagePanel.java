@@ -103,7 +103,25 @@ public class WagePanel extends LinearLayout {
     }
 
     public void refresh() {
-        if (monthSummary != null) refreshAll();
+        refreshAll();
+    }
+
+    public void setDisplayedMonth(YearMonth month) {
+        if (month == null) return;
+        displayedMonth = month;
+        refreshMonth();
+    }
+
+    public float getDisplayedMonthWage() {
+        YearMonth month = displayedMonth;
+        LocalDate ws = getWorkStartDate();
+        LocalDate start = month.atDay(1);
+        if (ws != null && start.isBefore(ws)) start = ws;
+        LocalDate end = month.equals(YearMonth.now()) ? LocalDate.now() : month.atEndOfMonth();
+        if (start.isAfter(end)) return 0f;
+        float wage = 0f;
+        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) wage += getWageForDate(d);
+        return wage;
     }
 
     private void buildUi() {
@@ -158,21 +176,16 @@ public class WagePanel extends LinearLayout {
         root.addView(viewTabs, viewTabsParams);
         weekTabButton = button("星期");
         dayTabButton = button("日期");
-        monthTabButton = button("月份");
         viewTabs.addView(weekTabButton, new LinearLayout.LayoutParams(0, dp(46), 1f));
         LinearLayout.LayoutParams middleTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
         middleTabParams.leftMargin = dp(6);
         viewTabs.addView(dayTabButton, middleTabParams);
-        LinearLayout.LayoutParams lastTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
-        lastTabParams.leftMargin = dp(6);
-        viewTabs.addView(monthTabButton, lastTabParams);
 
         weekContent = vertical();
         dayContent = vertical();
         monthContent = vertical();
         root.addView(weekContent);
         root.addView(dayContent);
-        root.addView(monthContent);
 
         TextView weekSection = text("按星期查看工资", 19, true);
         weekSection.setPadding(0, dp(18), 0, dp(8));
@@ -231,38 +244,8 @@ public class WagePanel extends LinearLayout {
         dayHint.setPadding(0, dp(10), 0, 0);
         dayCard.addView(dayHint);
 
-        TextView monthSection = text("按月查看工资", 19, true);
-        monthSection.setPadding(0, dp(18), 0, dp(8));
-        monthContent.addView(monthSection);
-        LinearLayout monthNav = horizontal();
-        monthNav.setGravity(Gravity.CENTER_VERTICAL);
-        monthContent.addView(monthNav);
-        previousMonthButton = button("‹");
-        previousMonthButton.setTextSize(24);
-        previousMonthButton.setOnClickListener(v -> { displayedMonth = displayedMonth.minusMonths(1); refreshMonth(); });
-        monthNav.addView(previousMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-        monthTitle = text("", 18, true);
-        monthTitle.setGravity(Gravity.CENTER);
-        monthTitle.setPadding(dp(8), dp(12), dp(8), dp(12));
-        monthTitle.setOnClickListener(v -> chooseMonth());
-        monthNav.addView(monthTitle, new LinearLayout.LayoutParams(0, -2, 1f));
-        nextMonthButton = button("›");
-        nextMonthButton.setTextSize(24);
-        nextMonthButton.setOnClickListener(v -> {
-            if (displayedMonth.isBefore(YearMonth.now())) displayedMonth = displayedMonth.plusMonths(1);
-            refreshMonth();
-        });
-        monthNav.addView(nextMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-        LinearLayout monthCard = card();
-        monthContent.addView(monthCard);
-        monthSummary = text("", 16, true);
-        monthCard.addView(monthSummary);
-        monthDetails = vertical();
-        monthCard.addView(monthDetails);
-
         weekTabButton.setOnClickListener(v -> showViewTab(0));
         dayTabButton.setOnClickListener(v -> showViewTab(1));
-        monthTabButton.setOnClickListener(v -> showViewTab(2));
         showViewTab(0);
 
     }
@@ -419,16 +402,12 @@ public class WagePanel extends LinearLayout {
         if (weekContent == null || dayContent == null || monthContent == null) return;
         weekContent.setVisibility(tab == 0 ? View.VISIBLE : View.GONE);
         dayContent.setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
-        monthContent.setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
         UiStyle.button(host, weekTabButton, tab == 0);
         UiStyle.button(host, dayTabButton, tab == 1);
-        UiStyle.button(host, monthTabButton, tab == 2);
         weekTabButton.setEnabled(tab != 0);
         dayTabButton.setEnabled(tab != 1);
-        monthTabButton.setEnabled(tab != 2);
         if (tab == 0) refreshWeek();
-        else if (tab == 1) refreshDay();
-        else refreshMonth();
+        else refreshDay();
     }
 
     private void refreshDay() {
