@@ -9,6 +9,8 @@ import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.CheckBox;
@@ -55,6 +57,8 @@ public class SettingsActivity extends Activity {
     private EditText endInput;
     private EditText breakInput;
     private EditText monthlyRestInput;
+    private Button monthlyRestButton;
+    private LinearLayout alarmOptionsGroup;
     private TextView previewText;
     private Button workStartDateButton;
     private CheckBox workAlarmCheck;
@@ -157,40 +161,50 @@ public class SettingsActivity extends Activity {
         workAlarmCheck.setTextSize(16);
         workAlarmCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (isChecked) WorkAlarmNotification.requestPermissionIfNeeded(this);
+            if (alarmOptionsGroup != null) alarmOptionsGroup.setVisibility(
+                    isChecked ? android.view.View.VISIBLE : android.view.View.GONE);
         });
         root.addView(workAlarmCheck);
+
+        alarmOptionsGroup = new LinearLayout(this);
+        alarmOptionsGroup.setOrientation(LinearLayout.VERTICAL);
+        root.addView(alarmOptionsGroup);
 
         alarmFollowWorkTimeCheck = new CheckBox(this);
         alarmFollowWorkTimeCheck.setText("闹钟时间跟随上班时间");
         alarmFollowWorkTimeCheck.setTextSize(16);
-        root.addView(alarmFollowWorkTimeCheck);
+        alarmOptionsGroup.addView(alarmFollowWorkTimeCheck);
 
         alarmTimeGroup = settingInputRow("自定义闹钟时间", dp(126));
         alarmTimeInput = input("07:30", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
         alarmTimeGroup.addView(alarmTimeInput, compactInputParams(dp(126)));
-        root.addView(alarmTimeGroup);
+        alarmOptionsGroup.addView(alarmTimeGroup);
 
         Runnable updateAlarmTimeVisibility = () -> alarmTimeGroup.setVisibility(
                 alarmFollowWorkTimeCheck.isChecked() ? android.view.View.GONE : android.view.View.VISIBLE);
         alarmFollowWorkTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> updateAlarmTimeVisibility.run());
 
-        LinearLayout updateTimeRow = settingInputRow("自动更新闹钟时间", dp(126));
+        LinearLayout updateTimeRow = settingInputRow("每周同步时间", dp(126));
         alarmUpdateTimeInput = input("12:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
         updateTimeRow.addView(alarmUpdateTimeInput, compactInputParams(dp(126)));
-        root.addView(updateTimeRow);
-        TextView updateTimeInfo = text("每周日到这个时间自动重新计算下一周工作日并同步系统时钟。系统省电策略可能让后台执行稍有延迟。", 13, false);
+        alarmOptionsGroup.addView(updateTimeRow);
+        TextView updateTimeInfo = text("每周日到这个时间重新计算下一周工作日并同步系统时钟。", 13, false);
         updateTimeInfo.setPadding(0, dp(4), 0, 0);
-        root.addView(updateTimeInfo);
+        alarmOptionsGroup.addView(updateTimeInfo);
 
-        previewText = text("", 15, true);
-        previewText.setPadding(0, dp(12), 0, dp(8));
-        root.addView(previewText);
-        Button preview = new Button(this);
-        UiStyle.button(this, preview, false);
-        preview.setText("计算每天工时");
-        preview.setOnClickListener(v -> updatePreview(true));
-        root.addView(preview, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(50)));
+        LinearLayout dailyHoursRow = settingInputRow("每天工时（自动）", dp(126));
+        previewText = text("", 16, true);
+        previewText.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        dailyHoursRow.addView(previewText, compactInputParams(dp(126)));
+        root.addView(dailyHoursRow);
+        TextWatcher hoursWatcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { updatePreview(false); }
+            @Override public void afterTextChanged(Editable s) { }
+        };
+        startInput.addTextChangedListener(hoursWatcher);
+        endInput.addTextChangedListener(hoursWatcher);
+        breakInput.addTextChangedListener(hoursWatcher);
 
         TextView weeklyTitle = text("每周休息日", 17, true);
         weeklyTitle.setPadding(0, dp(24), 0, dp(4));
@@ -232,11 +246,17 @@ public class SettingsActivity extends Activity {
         TextView monthlyTitle = text("每月固定休息日期", 17, true);
         monthlyTitle.setPadding(0, dp(24), 0, dp(4));
         root.addView(monthlyTitle);
-        TextView monthlyInfo = text("输入每月固定休息的日期，用逗号分隔，例如：5, 15, 28。留空表示不设置。", 13, false);
+        TextView monthlyInfo = text("点击选择每月固定休息的日期。", 13, false);
         monthlyInfo.setPadding(0, 0, 0, dp(6));
         root.addView(monthlyInfo);
-        monthlyRestInput = input("例如：5, 15, 28", InputType.TYPE_CLASS_TEXT);
+        monthlyRestInput = input("", InputType.TYPE_CLASS_TEXT);
+        monthlyRestInput.setVisibility(android.view.View.GONE);
         root.addView(monthlyRestInput);
+        monthlyRestButton = new Button(this);
+        UiStyle.button(this, monthlyRestButton, false);
+        monthlyRestButton.setOnClickListener(v -> showMonthlyRestPicker());
+        root.addView(monthlyRestButton, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(50)));
 
         Button save = new Button(this);
         UiStyle.button(this, save, true);
@@ -488,6 +508,57 @@ public class SettingsActivity extends Activity {
                 14, rest ? UiStyle.PRIMARY : UiStyle.BORDER, 1));
     }
 
+    private void updateMonthlyRestButton() {
+        if (monthlyRestButton == null || monthlyRestInput == null) return;
+        String raw = monthlyRestInput.getText().toString().trim();
+        monthlyRestButton.setText(raw.isEmpty() ? "未设置固定日期" : "已选：" + raw);
+    }
+
+    private void showMonthlyRestPicker() {
+        final boolean[] selected = new boolean[32];
+        String raw = monthlyRestInput.getText().toString().trim();
+        if (!raw.isEmpty()) {
+            for (String part : raw.replace('，', ',').split(",")) {
+                try { int d = Integer.parseInt(part.trim()); if (d >= 1 && d <= 31) selected[d] = true; }
+                catch (Exception ignored) { }
+            }
+        }
+        GridLayout grid = new GridLayout(this);
+        grid.setColumnCount(7);
+        grid.setPadding(dp(12), dp(8), dp(12), dp(8));
+        Button[] buttons = new Button[32];
+        for (int d = 1; d <= 31; d++) {
+            final int day = d;
+            Button b = new Button(this);
+            buttons[d] = b;
+            b.setText(String.valueOf(d));
+            b.setTextSize(14);
+            b.setMinWidth(0); b.setMinHeight(0); b.setPadding(0,0,0,0);
+            Runnable paint = () -> {
+                b.setTextColor(selected[day] ? android.graphics.Color.WHITE : UiStyle.TEXT);
+                b.setBackground(UiStyle.roundRect(this, selected[day] ? UiStyle.PRIMARY : UiStyle.CARD_BG,
+                        12, selected[day] ? UiStyle.PRIMARY : UiStyle.BORDER, 1));
+            };
+            b.setOnClickListener(v -> { selected[day] = !selected[day]; paint.run(); });
+            paint.run();
+            GridLayout.LayoutParams gp = new GridLayout.LayoutParams();
+            gp.width = 0; gp.height = dp(44); gp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+            gp.setMargins(dp(3), dp(3), dp(3), dp(3));
+            grid.addView(b, gp);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("每月固定休息日")
+                .setView(grid)
+                .setNegativeButton("取消", null)
+                .setNeutralButton("清空", (d,w) -> { monthlyRestInput.setText(""); updateMonthlyRestButton(); })
+                .setPositiveButton("确定", (d,w) -> {
+                    StringBuilder out = new StringBuilder();
+                    for (int i=1;i<=31;i++) if (selected[i]) { if (out.length()>0) out.append(", "); out.append(i); }
+                    monthlyRestInput.setText(out.toString());
+                    updateMonthlyRestButton();
+                }).show();
+    }
+
     private LinearLayout settingInputRow(String label, int inputWidth) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -526,6 +597,9 @@ public class SettingsActivity extends Activity {
         alarmUpdateTimeInput.setText(prefs.getString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, "12:00"));
         alarmTimeGroup.setVisibility(alarmFollowWorkTimeCheck.isChecked()
                 ? android.view.View.GONE : android.view.View.VISIBLE);
+        alarmOptionsGroup.setVisibility(workAlarmCheck.isChecked()
+                ? android.view.View.VISIBLE : android.view.View.GONE);
+        updateMonthlyRestButton();
 
         workStartDate = null;
         String savedStartDate = prefs.getString(WORK_START_DATE_KEY, "");
@@ -626,6 +700,7 @@ public class SettingsActivity extends Activity {
         alarmTimeInput.setText(alarmTime);
         alarmUpdateTimeInput.setText(alarmUpdateTime);
         monthlyRestInput.setText(monthlyRestDays);
+        updateMonthlyRestButton();
         updatePreview(false);
     }
 

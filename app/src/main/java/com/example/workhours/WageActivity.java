@@ -148,27 +148,9 @@ public class WageActivity extends Activity {
         save.setOnClickListener(v -> saveWageSettings());
         root.addView(save, new LinearLayout.LayoutParams(-1, dp(52)));
 
-        TextView dayTitle = text("查看某一天工资 / 扣工资", 19, true);
-        dayTitle.setPadding(0, dp(24), 0, dp(8));
-        root.addView(dayTitle);
-        selectedDateButton = button("");
-        selectedDateButton.setOnClickListener(v -> chooseDate());
-        root.addView(selectedDateButton, new LinearLayout.LayoutParams(-1, dp(50)));
-
-        LinearLayout dayCard = card();
-        LinearLayout.LayoutParams dcp = new LinearLayout.LayoutParams(-1, -2);
-        dcp.topMargin = dp(8);
-        root.addView(dayCard, dcp);
-        daySummary = text("", 15, true);
-        dayCard.addView(daySummary);
-        deductCheck = new CheckBox(this);
-        deductCheck.setText("这一天需要扣工资");
-        deductCheck.setTextSize(15);
-        dayCard.addView(deductCheck);
-        Button saveDeduction = button("保存这一天的扣工资设置");
-        UiStyle.button(this, saveDeduction, true);
-        saveDeduction.setOnClickListener(v -> saveDeduction());
-        dayCard.addView(saveDeduction, new LinearLayout.LayoutParams(-1, dp(48)));
+        TextView dayInfo = text("单日扣工资请在主页点击对应日期设置。", 13, false);
+        dayInfo.setPadding(0, dp(12), 0, dp(4));
+        root.addView(dayInfo);
 
         TextView weekSection = text("按星期查看工资", 19, true);
         weekSection.setPadding(0, dp(24), 0, dp(8));
@@ -302,7 +284,6 @@ public class WageActivity extends Activity {
     private void refreshAll() {
         LocalDate ws = getWorkStartDate();
         if (ws != null && selectedDate.isBefore(ws)) selectedDate = ws;
-        refreshDay();
         refreshWeek();
         refreshMonth();
     }

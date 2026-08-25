@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -45,6 +46,7 @@ public class MainActivity extends Activity {
     private static final String LEAVE_PREFIX = "leave_";
     private static final String LEAVE_NOTE_PREFIX = "leave_note_";
     private static final String REST_PREFIX = "rest_";
+    private static final String WAGE_DEDUCT_PREFIX = "wage_deduct_";
     private static final String START_TIME_KEY = "start_time";
     private static final String END_TIME_KEY = "end_time";
     private static final String BREAK_MINUTES_KEY = "break_minutes";
@@ -59,6 +61,7 @@ public class MainActivity extends Activity {
     private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
     private GridLayout calendarGrid;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
+    private LinearLayout weekSectionContainer, rangeSectionContainer;
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
     private Button rangeStartButton, rangeEndButton;
 
@@ -107,8 +110,36 @@ public class MainActivity extends Activity {
         top.addView(settings, new LinearLayout.LayoutParams(dp(86), dp(48)));
 
         buildMonthSection(root);
-        buildWeekSection(root);
-        buildRangeSection(root);
+
+        TextView statsTitle = text("更多统计", 19, true);
+        statsTitle.setPadding(0, dp(24), 0, dp(8));
+        root.addView(statsTitle);
+        LinearLayout statsButtons = horizontal();
+        root.addView(statsButtons);
+        Button weekToggle = button("周统计");
+        Button rangeToggle = button("范围统计");
+        statsButtons.addView(weekToggle, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        LinearLayout.LayoutParams rtp = new LinearLayout.LayoutParams(0, dp(48), 1f); rtp.leftMargin = dp(8);
+        statsButtons.addView(rangeToggle, rtp);
+
+        weekSectionContainer = vertical();
+        weekSectionContainer.setVisibility(View.GONE);
+        root.addView(weekSectionContainer);
+        buildWeekSection(weekSectionContainer);
+        rangeSectionContainer = vertical();
+        rangeSectionContainer.setVisibility(View.GONE);
+        root.addView(rangeSectionContainer);
+        buildRangeSection(rangeSectionContainer);
+        weekToggle.setOnClickListener(v -> {
+            boolean show = weekSectionContainer.getVisibility() != View.VISIBLE;
+            weekSectionContainer.setVisibility(show ? View.VISIBLE : View.GONE);
+            if (show) rangeSectionContainer.setVisibility(View.GONE);
+        });
+        rangeToggle.setOnClickListener(v -> {
+            boolean show = rangeSectionContainer.getVisibility() != View.VISIBLE;
+            rangeSectionContainer.setVisibility(show ? View.VISIBLE : View.GONE);
+            if (show) weekSectionContainer.setVisibility(View.GONE);
+        });
 
         TextView ex = text("本月异常记录", 19, true);
         ex.setPadding(0, dp(24), 0, dp(8));
@@ -258,6 +289,8 @@ public class MainActivity extends Activity {
 
         TextView otTitle=text("加班",14,true);otTitle.setPadding(0,dp(16),0,dp(4));box.addView(otTitle);CheckBox overtimeCheck=new CheckBox(this);overtimeCheck.setText("这一天有加班");overtimeCheck.setChecked(hasOt);box.addView(overtimeCheck);
         LinearLayout otr=horizontal();Button otStartButton=button(currentOtStart),otEndButton=button(currentOtEnd);otr.addView(otStartButton,new LinearLayout.LayoutParams(0,dp(50),1));TextView otTo=text(" 至 ",14,false);otTo.setGravity(Gravity.CENTER);otr.addView(otTo,new LinearLayout.LayoutParams(dp(38),dp(50)));otr.addView(otEndButton,new LinearLayout.LayoutParams(0,dp(50),1));box.addView(otr);
+        TextView wageTitle=text("工资",14,true);wageTitle.setPadding(0,dp(16),0,dp(2));box.addView(wageTitle);
+        CheckBox wageDeductCheck=new CheckBox(this);wageDeductCheck.setText("这一天需要扣工资");wageDeductCheck.setChecked(prefs.getBoolean(wageDeductKey(date),false));box.addView(wageDeductCheck);
         TextView calculated=text("",15,true);calculated.setPadding(0,dp(10),0,0);box.addView(calculated);
         final String[] ss={currentStart},se={currentEnd},os={currentOtStart},oe={currentOtEnd};
         Runnable update=()->{float base=0,ot=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());Float h=calculateHours(ss[0],se[0],b==null?-1:b);if(h!=null)base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h!=null)ot=h;}calculated.setText("正常工时："+formatDurationHours(base)+"\n加班："+formatDurationHours(ot)+"\n合计："+formatDurationHours(base+ot));};
@@ -266,9 +299,9 @@ public class MainActivity extends Activity {
         Runnable controls=()->{boolean n=normal.isChecked(),l=leave.isChecked(),o=overtimeCheck.isChecked();startButton.setEnabled(n);endButton.setEnabled(n);breakInput.setEnabled(n);reason.setEnabled(l);otStartButton.setEnabled(o);otEndButton.setEnabled(o);update.run();};group.setOnCheckedChangeListener((g,id)->controls.run());overtimeCheck.setOnCheckedChangeListener((b,c)->controls.run());controls.run();
 
         DateTimeFormatter tf=DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE",Locale.CHINA); AlertDialog dialog=new AlertDialog.Builder(this).setTitle(date.format(tf)).setView(sc).setPositiveButton("保存",null).setNeutralButton("恢复自动",null).setNegativeButton("取消",null).create();
-        dialog.setOnShowListener(x->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String note=reason.getText().toString().trim();float base=0,ot=0;int br=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());if(b==null||b<0||b>=1440){breakInput.setError("请输入 0～1439 分钟");return;}br=b;Float h=calculateHours(ss[0],se[0],br);if(h==null){Toast.makeText(this,"请检查上下班时间",Toast.LENGTH_SHORT).show();return;}base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h==null||h<=0){Toast.makeText(this,"请设置正确的加班开始和结束时间",Toast.LENGTH_SHORT).show();return;}ot=h;}final float fBase=base,fOt=ot;final int fBr=br;String target=leave.isChecked()?"请假":rest.isChecked()?"休息":"正常上班";String msg="日期："+date.format(tf)+"\n状态："+target+(normal.isChecked()?"\n上班："+ss[0]+"\n下班："+se[0]+"\n休息："+fBr+" 分钟":"")+(overtimeCheck.isChecked()?"\n加班："+os[0]+"–"+oe[0]+"（"+formatDurationHours(fOt)+"）":"")+"\n总工时："+formatDurationHours(fBase+fOt);
-            new AlertDialog.Builder(this).setTitle("确认修改？").setMessage(msg).setNegativeButton("取消",null).setPositiveButton("确认修改",(d,w)->{SharedPreferences.Editor e=prefs.edit();if(leave.isChecked()){e.putBoolean(leaveKey(date),true).remove(restKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));if(note.isEmpty())e.remove(leaveNoteKey(date));else e.putString(leaveNoteKey(date),note);}else if(rest.isChecked()){e.putBoolean(restKey(date),true).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));}else{e.remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date));boolean same=configured&&ss[0].equals(defaultStart)&&se[0].equals(defaultEnd)&&fBr==defaultBreak&&Math.abs(fBase-daily)<0.0001f;if(same)e.remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));else e.putFloat(overrideKey(date),fBase).putString(dayStartKey(date),ss[0]).putString(dayEndKey(date),se[0]).putInt(dayBreakKey(date),fBr);}if(overtimeCheck.isChecked())e.putString(overtimeStartKey(date),os[0]).putString(overtimeEndKey(date),oe[0]);else e.remove(overtimeStartKey(date)).remove(overtimeEndKey(date));e.apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();Toast.makeText(this,"修改已保存",Toast.LENGTH_SHORT).show();}).show();});
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->new AlertDialog.Builder(this).setTitle("确认恢复自动？").setMessage("将清除当天手动状态、上下班时间和加班时间，重新按自动规则计算。").setNegativeButton("取消",null).setPositiveButton("确认恢复",(d,w)->{prefs.edit().remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date)).remove(overtimeStartKey(date)).remove(overtimeEndKey(date)).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date)).apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();}).show());});
+        dialog.setOnShowListener(x->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String note=reason.getText().toString().trim();float base=0,ot=0;int br=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());if(b==null||b<0||b>=1440){breakInput.setError("请输入 0～1439 分钟");return;}br=b;Float h=calculateHours(ss[0],se[0],br);if(h==null){Toast.makeText(this,"请检查上下班时间",Toast.LENGTH_SHORT).show();return;}base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h==null||h<=0){Toast.makeText(this,"请设置正确的加班开始和结束时间",Toast.LENGTH_SHORT).show();return;}ot=h;}final float fBase=base,fOt=ot;final int fBr=br;String target=leave.isChecked()?"请假":rest.isChecked()?"休息":"正常上班";String msg="日期："+date.format(tf)+"\n状态："+target+(normal.isChecked()?"\n上班："+ss[0]+"\n下班："+se[0]+"\n休息："+fBr+" 分钟":"")+(overtimeCheck.isChecked()?"\n加班："+os[0]+"–"+oe[0]+"（"+formatDurationHours(fOt)+"）":"")+"\n总工时："+formatDurationHours(fBase+fOt)+(wageDeductCheck.isChecked()?"\n工资：本日扣工资":"");
+            new AlertDialog.Builder(this).setTitle("确认修改？").setMessage(msg).setNegativeButton("取消",null).setPositiveButton("确认修改",(d,w)->{SharedPreferences.Editor e=prefs.edit();if(leave.isChecked()){e.putBoolean(leaveKey(date),true).remove(restKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));if(note.isEmpty())e.remove(leaveNoteKey(date));else e.putString(leaveNoteKey(date),note);}else if(rest.isChecked()){e.putBoolean(restKey(date),true).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));}else{e.remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date));boolean same=configured&&ss[0].equals(defaultStart)&&se[0].equals(defaultEnd)&&fBr==defaultBreak&&Math.abs(fBase-daily)<0.0001f;if(same)e.remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));else e.putFloat(overrideKey(date),fBase).putString(dayStartKey(date),ss[0]).putString(dayEndKey(date),se[0]).putInt(dayBreakKey(date),fBr);}if(overtimeCheck.isChecked())e.putString(overtimeStartKey(date),os[0]).putString(overtimeEndKey(date),oe[0]);else e.remove(overtimeStartKey(date)).remove(overtimeEndKey(date));if(wageDeductCheck.isChecked())e.putBoolean(wageDeductKey(date),true);else e.remove(wageDeductKey(date));e.apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();Toast.makeText(this,"修改已保存",Toast.LENGTH_SHORT).show();}).show();});
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->new AlertDialog.Builder(this).setTitle("确认恢复自动？").setMessage("将清除当天手动状态、上下班时间和加班时间，重新按自动规则计算。").setNegativeButton("取消",null).setPositiveButton("确认恢复",(d,w)->{prefs.edit().remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date)).remove(overtimeStartKey(date)).remove(overtimeEndKey(date)).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date)).remove(wageDeductKey(date)).apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();}).show());});
         dialog.show();
     }
 
@@ -293,7 +326,7 @@ public class MainActivity extends Activity {
     private LocalDate mondayOf(LocalDate d){return d.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));}
     private float getBaseHoursForDate(LocalDate d,float daily,boolean configured){LocalDate ws=getWorkStartDate();if(ws!=null&&d.isBefore(ws))return 0;if(isBankHoliday(d)||isLeave(d)||isManualRest(d))return 0;return prefs.getFloat(overrideKey(d),configured?daily:0);}
     private boolean hasOverride(LocalDate d){return prefs.contains(overrideKey(d));} private boolean isLeave(LocalDate d){return prefs.getBoolean(leaveKey(d),false);} private boolean isManualRest(LocalDate d){return prefs.getBoolean(restKey(d),false);} private String getLeaveNote(LocalDate d){return prefs.getString(leaveNoteKey(d),"");}
-    private String overrideKey(LocalDate d){return OVERRIDE_PREFIX+d;} private String dayStartKey(LocalDate d){return DAY_START_PREFIX+d;} private String dayEndKey(LocalDate d){return DAY_END_PREFIX+d;} private String dayBreakKey(LocalDate d){return DAY_BREAK_PREFIX+d;} private String overtimeStartKey(LocalDate d){return OVERTIME_START_PREFIX+d;} private String overtimeEndKey(LocalDate d){return OVERTIME_END_PREFIX+d;} private String leaveKey(LocalDate d){return LEAVE_PREFIX+d;} private String leaveNoteKey(LocalDate d){return LEAVE_NOTE_PREFIX+d;} private String restKey(LocalDate d){return REST_PREFIX+d;}
+    private String overrideKey(LocalDate d){return OVERRIDE_PREFIX+d;} private String dayStartKey(LocalDate d){return DAY_START_PREFIX+d;} private String dayEndKey(LocalDate d){return DAY_END_PREFIX+d;} private String dayBreakKey(LocalDate d){return DAY_BREAK_PREFIX+d;} private String overtimeStartKey(LocalDate d){return OVERTIME_START_PREFIX+d;} private String overtimeEndKey(LocalDate d){return OVERTIME_END_PREFIX+d;} private String leaveKey(LocalDate d){return LEAVE_PREFIX+d;} private String wageDeductKey(LocalDate d){return WAGE_DEDUCT_PREFIX+d;} private String leaveNoteKey(LocalDate d){return LEAVE_NOTE_PREFIX+d;} private String restKey(LocalDate d){return REST_PREFIX+d;}
     private boolean isBankHoliday(LocalDate d){return getBankHolidayName(d)!=null;}
     private String getBankHolidayName(LocalDate date){int y=date.getYear();LocalDate ny=observedDate(LocalDate.of(y,Month.JANUARY,1));if(date.equals(ny))return "New Year’s Day";LocalDate es=easterSunday(y);if(date.equals(es.minusDays(2)))return "Good Friday";if(date.equals(es.plusDays(1)))return "Easter Monday";LocalDate em=LocalDate.of(y,Month.MAY,1).with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY));if(date.equals(em))return "Early May bank holiday";LocalDate sp=LocalDate.of(y,Month.MAY,31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));if(date.equals(sp))return "Spring bank holiday";LocalDate su=LocalDate.of(y,Month.AUGUST,31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));if(date.equals(su))return "Summer bank holiday";LocalDate x=LocalDate.of(y,Month.DECEMBER,25),b=LocalDate.of(y,Month.DECEMBER,26),ox,ob;if(x.getDayOfWeek()==DayOfWeek.SATURDAY){ox=LocalDate.of(y,Month.DECEMBER,27);ob=LocalDate.of(y,Month.DECEMBER,28);}else if(x.getDayOfWeek()==DayOfWeek.SUNDAY){ox=LocalDate.of(y,Month.DECEMBER,27);ob=LocalDate.of(y,Month.DECEMBER,26);}else{ox=x;ob=b.getDayOfWeek()==DayOfWeek.SATURDAY?LocalDate.of(y,Month.DECEMBER,28):b;}if(date.equals(ox))return "Christmas Day";if(date.equals(ob))return "Boxing Day";return null;}
     private LocalDate observedDate(LocalDate d){if(d.getDayOfWeek()==DayOfWeek.SATURDAY)return d.plusDays(2);if(d.getDayOfWeek()==DayOfWeek.SUNDAY)return d.plusDays(1);return d;}
