@@ -61,6 +61,7 @@ public class SettingsActivity extends Activity {
     private CheckBox alarmFollowWorkTimeCheck;
     private EditText alarmTimeInput;
     private LinearLayout alarmTimeGroup;
+    private EditText alarmUpdateTimeInput;
     private LocalDate workStartDate;
     private final CheckBox[] restDayChecks = new CheckBox[7];
 
@@ -172,6 +173,15 @@ public class SettingsActivity extends Activity {
         Runnable updateAlarmTimeVisibility = () -> alarmTimeGroup.setVisibility(
                 alarmFollowWorkTimeCheck.isChecked() ? android.view.View.GONE : android.view.View.VISIBLE);
         alarmFollowWorkTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> updateAlarmTimeVisibility.run());
+
+        TextView updateTimeLabel = text("每周日自动更新闹钟时间（HH:mm）", 15, true);
+        updateTimeLabel.setPadding(0, dp(12), 0, 0);
+        root.addView(updateTimeLabel);
+        alarmUpdateTimeInput = input("例如：12:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+        root.addView(alarmUpdateTimeInput);
+        TextView updateTimeInfo = text("每周日到这个时间自动重新计算下一周工作日并同步系统时钟。系统省电策略可能让后台执行稍有延迟。", 13, false);
+        updateTimeInfo.setPadding(0, dp(4), 0, 0);
+        root.addView(updateTimeInfo);
 
         previewText = text("", 15, true);
         previewText.setPadding(0, dp(12), 0, dp(8));
@@ -466,6 +476,7 @@ public class SettingsActivity extends Activity {
         workAlarmCheck.setChecked(prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false));
         alarmFollowWorkTimeCheck.setChecked(prefs.getBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, true));
         alarmTimeInput.setText(prefs.getString(WorkAlarmManager.ALARM_TIME_KEY, "07:30"));
+        alarmUpdateTimeInput.setText(prefs.getString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, "12:00"));
         alarmTimeGroup.setVisibility(alarmFollowWorkTimeCheck.isChecked()
                 ? android.view.View.GONE : android.view.View.VISIBLE);
 
@@ -516,6 +527,12 @@ public class SettingsActivity extends Activity {
             return;
         }
         if (parseTime(alarmTime) == null) alarmTime = "07:30";
+        String alarmUpdateTime = normalizeTime(alarmUpdateTimeInput.getText().toString());
+        if (workAlarmCheck.isChecked() && parseTime(alarmUpdateTime) == null) {
+            alarmUpdateTimeInput.setError("请输入 HH:mm，例如 12:00");
+            return;
+        }
+        if (parseTime(alarmUpdateTime) == null) alarmUpdateTime = "12:00";
 
         SharedPreferences.Editor editor = prefs.edit()
                 .putString(START_TIME_KEY, start)
@@ -525,7 +542,8 @@ public class SettingsActivity extends Activity {
                 .putString(MONTHLY_REST_DAYS_KEY, monthlyRestDays)
                 .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked())
                 .putBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, followWorkTime)
-                .putString(WorkAlarmManager.ALARM_TIME_KEY, alarmTime);
+                .putString(WorkAlarmManager.ALARM_TIME_KEY, alarmTime)
+                .putString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, alarmUpdateTime);
 
         if (workStartDate == null) editor.remove(WORK_START_DATE_KEY);
         else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());
@@ -536,6 +554,7 @@ public class SettingsActivity extends Activity {
         editor.apply();
 
         if (workAlarmCheck.isChecked()) {
+            WorkAlarmUpdateScheduler.schedule(this);
             if (WorkAlarmManager.forceSync(this)) {
                 Toast.makeText(this,
                         "设置已保存 ｜ 系统闹钟写入请求已成功发送",
@@ -547,12 +566,14 @@ public class SettingsActivity extends Activity {
             }
         } else {
             WorkAlarmManager.cancel(this);
+            WorkAlarmUpdateScheduler.cancel(this);
             Toast.makeText(this, "设置已保存 ｜ 自动闹钟已关闭", Toast.LENGTH_SHORT).show();
         }
 
         startInput.setText(start);
         endInput.setText(end);
         alarmTimeInput.setText(alarmTime);
+        alarmUpdateTimeInput.setText(alarmUpdateTime);
         monthlyRestInput.setText(monthlyRestDays);
         updatePreview(false);
     }

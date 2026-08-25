@@ -9,8 +9,17 @@ public class WorkAlarmRescheduleReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         SharedPreferences prefs = context.getSharedPreferences("work_hours_prefs", Context.MODE_PRIVATE);
-        if (prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)) {
+        if (!prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)) {
+            WorkAlarmUpdateScheduler.cancel(context);
+            return;
+        }
+
+        String action = intent == null ? null : intent.getAction();
+        if (WorkAlarmUpdateScheduler.ACTION_WEEKLY_UPDATE.equals(action)) {
+            WorkAlarmManager.forceSyncNextWeek(context);
+        } else {
             prefs.edit().remove("work_alarm_last_sync_signature").apply();
         }
+        WorkAlarmUpdateScheduler.schedule(context);
     }
 }

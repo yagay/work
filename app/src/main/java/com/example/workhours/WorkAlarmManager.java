@@ -43,6 +43,28 @@ public final class WorkAlarmManager {
      * The WorkHours app never rings by itself; the clock app owns the actual alarm.
      */
     public static boolean sync(Context context) {
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        return syncWeek(context, monday, true, false);
+    }
+
+    /** Synchronize the full next ISO week, intended for the Sunday automatic refresh. */
+    public static boolean syncNextWeek(Context context) {
+        LocalDate nextMonday = LocalDate.now()
+                .with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        return syncWeek(context, nextMonday, false, false);
+    }
+
+    public static boolean forceSyncNextWeek(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        prefs.edit().remove(LAST_SYNC_SIGNATURE_KEY).apply();
+        return syncWeek(context,
+                LocalDate.now().with(TemporalAdjusters.next(DayOfWeek.MONDAY)),
+                false, true);
+    }
+
+    private static boolean syncWeek(Context context, LocalDate monday,
+                                    boolean skipPastDays, boolean force) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (!prefs.getBoolean(ENABLED_KEY, false)) {
             prefs.edit().remove(LAST_SYNC_SIGNATURE_KEY).apply();
@@ -57,35 +79,26 @@ public final class WorkAlarmManager {
         if (workTime == null) return false;
 
         LocalDate today = LocalDate.now();
-        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate sunday = monday.plusDays(6);
-
         ArrayList<Integer> days = new ArrayList<>();
         int mask = 0;
         for (LocalDate d = monday; !d.isAfter(sunday); d = d.plusDays(1)) {
-            // Do not add an alarm occurrence that has already passed this week.
-            if (d.isBefore(today)) continue;
-            if (d.equals(today) && !workTime.isAfter(LocalTime.now())) continue;
+            if (skipPastDays) {
+                if (d.isBefore(today)) continue;
+                if (d.equals(today) && !workTime.isAfter(LocalTime.now())) continue;
+            }
             if (!isWorkAlarmDay(prefs, d)) continue;
-
-            int calendarDay = toCalendarDay(d.getDayOfWeek());
-            days.add(calendarDay);
+            days.add(toCalendarDay(d.getDayOfWeek()));
             mask |= 1 << (d.getDayOfWeek().getValue() - 1);
         }
 
         WeekFields wf = WeekFields.ISO;
-        int week = today.get(wf.weekOfWeekBasedYear());
-        int weekYear = today.get(wf.weekBasedYear());
-        String signature = weekYear + "-W" + week + "|"
-                + workTime + "|" + mask;
-
-        if (signature.equals(prefs.getString(LAST_SYNC_SIGNATURE_KEY, ""))) {
-            return true;
-        }
+        int week = monday.get(wf.weekOfWeekBasedYear());
+        int weekYear = monday.get(wf.weekBasedYear());
+        String signature = weekYear + "-W" + week + "|" + workTime + "|" + mask;
+        if (!force && signature.equals(prefs.getString(LAST_SYNC_SIGNATURE_KEY, ""))) return true;
 
         if (days.isEmpty()) {
-            // There is no valid work day left in this week. Mark this week as synchronized;
-            // the next visible app session in a new ISO week will calculate a new rule.
             prefs.edit().putString(LAST_SYNC_SIGNATURE_KEY, signature).apply();
             return true;
         }
@@ -97,9 +110,7 @@ public final class WorkAlarmManager {
                 .putExtra(AlarmClock.EXTRA_DAYS, days)
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true);
 
-        if (!(context instanceof Activity)) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        }
+        if (!(context instanceof Activity)) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         if (intent.resolveActivity(context.getPackageManager()) == null) return false;
 
         try {
