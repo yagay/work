@@ -21,8 +21,22 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK 37
-        run: yes | sdkmanager "platforms;android-37" "build-tools;37.0.0"
+      - name: Install Android 17 preview SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_LIST="$(sdkmanager --list --channel=3)"
+          printf '%s\n' "$SDK_LIST" | grep -Ei 'cinnamon|platforms;android-37|build-tools;37' || true
+          PLATFORM="$(printf '%s\n' "$SDK_LIST" | awk -F'|' 'tolower($0) ~ /cinnamon/ && $1 ~ /platforms;android-/ {gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1; exit}')"
+          if [ -z "$PLATFORM" ]; then
+            PLATFORM="$(printf '%s\n' "$SDK_LIST" | awk -F'|' '$1 ~ /platforms;android-37/ {gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1; exit}')"
+          fi
+          BUILD_TOOLS="$(printf '%s\n' "$SDK_LIST" | awk -F'|' '$1 ~ /build-tools;37/ {gsub(/^[ \t]+|[ \t]+$/, "", $1); print $1; exit}')"
+          echo "Selected platform: $PLATFORM"
+          echo "Selected build tools: $BUILD_TOOLS"
+          test -n "$PLATFORM"
+          test -n "$BUILD_TOOLS"
+          sdkmanager --channel=3 "$PLATFORM" "$BUILD_TOOLS"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
