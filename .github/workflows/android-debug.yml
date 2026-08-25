@@ -24,6 +24,15 @@ jobs:
       - name: Install Android SDK 37.0
         run: sdkmanager --channel=3 "platforms;android-37.0" "build-tools;37.0.0"
 
+      - name: Normalize Android SDK 37 path
+        shell: bash
+        run: |
+          set -e
+          if [ -d "$ANDROID_HOME/platforms/android-37.0" ] && [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            ln -s "$ANDROID_HOME/platforms/android-37.0" "$ANDROID_HOME/platforms/android-37"
+          fi
+          ls -la "$ANDROID_HOME/platforms"
+
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
