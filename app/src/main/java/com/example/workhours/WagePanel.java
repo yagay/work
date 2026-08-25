@@ -68,6 +68,12 @@ public class WagePanel extends LinearLayout {
     private Button selectedDateButton;
     private TextView daySummary;
     private CheckBox deductCheck;
+    private LinearLayout weekContent;
+    private LinearLayout dayContent;
+    private LinearLayout monthContent;
+    private Button weekTabButton;
+    private Button dayTabButton;
+    private Button monthTabButton;
 
     private YearMonth displayedMonth;
     private LocalDate displayedWeekStart;
@@ -137,12 +143,34 @@ public class WagePanel extends LinearLayout {
         dayInfo.setPadding(0, dp(12), 0, dp(4));
         root.addView(dayInfo);
 
+        LinearLayout viewTabs = horizontal();
+        LinearLayout.LayoutParams viewTabsParams = new LinearLayout.LayoutParams(-1, dp(46));
+        viewTabsParams.topMargin = dp(18);
+        root.addView(viewTabs, viewTabsParams);
+        weekTabButton = button("星期");
+        dayTabButton = button("日期");
+        monthTabButton = button("月份");
+        viewTabs.addView(weekTabButton, new LinearLayout.LayoutParams(0, dp(46), 1f));
+        LinearLayout.LayoutParams middleTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        middleTabParams.leftMargin = dp(6);
+        viewTabs.addView(dayTabButton, middleTabParams);
+        LinearLayout.LayoutParams lastTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        lastTabParams.leftMargin = dp(6);
+        viewTabs.addView(monthTabButton, lastTabParams);
+
+        weekContent = vertical();
+        dayContent = vertical();
+        monthContent = vertical();
+        root.addView(weekContent);
+        root.addView(dayContent);
+        root.addView(monthContent);
+
         TextView weekSection = text("按星期查看工资", 19, true);
-        weekSection.setPadding(0, dp(24), 0, dp(8));
-        root.addView(weekSection);
+        weekSection.setPadding(0, dp(18), 0, dp(8));
+        weekContent.addView(weekSection);
         LinearLayout weekNav = horizontal();
         weekNav.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(weekNav);
+        weekContent.addView(weekNav);
         previousWeekButton = button("‹");
         previousWeekButton.setTextSize(24);
         previousWeekButton.setOnClickListener(v -> { displayedWeekStart = displayedWeekStart.minusWeeks(1); refreshWeek(); });
@@ -159,18 +187,34 @@ public class WagePanel extends LinearLayout {
         });
         weekNav.addView(nextWeekButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
         LinearLayout weekCard = card();
-        root.addView(weekCard);
+        weekContent.addView(weekCard);
         weekSummary = text("", 16, true);
         weekCard.addView(weekSummary);
         weekDetails = vertical();
         weekCard.addView(weekDetails);
 
+        TextView daySection = text("按日期查看工资", 19, true);
+        daySection.setPadding(0, dp(18), 0, dp(8));
+        dayContent.addView(daySection);
+        selectedDateButton = button("");
+        selectedDateButton.setOnClickListener(v -> chooseDate());
+        dayContent.addView(selectedDateButton, new LinearLayout.LayoutParams(-1, dp(50)));
+        LinearLayout dayCard = card();
+        LinearLayout.LayoutParams dayCardParams = new LinearLayout.LayoutParams(-1, -2);
+        dayCardParams.topMargin = dp(10);
+        dayContent.addView(dayCard, dayCardParams);
+        daySummary = text("", 16, true);
+        dayCard.addView(daySummary);
+        TextView dayHint = text("扣工资请回到工时统计后点击对应日期修改。", 13, false);
+        dayHint.setPadding(0, dp(10), 0, 0);
+        dayCard.addView(dayHint);
+
         TextView monthSection = text("按月查看工资", 19, true);
-        monthSection.setPadding(0, dp(24), 0, dp(8));
-        root.addView(monthSection);
+        monthSection.setPadding(0, dp(18), 0, dp(8));
+        monthContent.addView(monthSection);
         LinearLayout monthNav = horizontal();
         monthNav.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(monthNav);
+        monthContent.addView(monthNav);
         previousMonthButton = button("‹");
         previousMonthButton.setTextSize(24);
         previousMonthButton.setOnClickListener(v -> { displayedMonth = displayedMonth.minusMonths(1); refreshMonth(); });
@@ -186,11 +230,16 @@ public class WagePanel extends LinearLayout {
         });
         monthNav.addView(nextMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
         LinearLayout monthCard = card();
-        root.addView(monthCard);
+        monthContent.addView(monthCard);
         monthSummary = text("", 16, true);
         monthCard.addView(monthSummary);
         monthDetails = vertical();
         monthCard.addView(monthDetails);
+
+        weekTabButton.setOnClickListener(v -> showViewTab(0));
+        dayTabButton.setOnClickListener(v -> showViewTab(1));
+        monthTabButton.setOnClickListener(v -> showViewTab(2));
+        showViewTab(0);
 
     }
 
@@ -269,12 +318,29 @@ public class WagePanel extends LinearLayout {
         LocalDate ws = getWorkStartDate();
         if (ws != null && selectedDate.isBefore(ws)) selectedDate = ws;
         refreshWeek();
+        refreshDay();
         refreshMonth();
     }
 
+    private void showViewTab(int tab) {
+        if (weekContent == null || dayContent == null || monthContent == null) return;
+        weekContent.setVisibility(tab == 0 ? View.VISIBLE : View.GONE);
+        dayContent.setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
+        monthContent.setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
+        UiStyle.button(host, weekTabButton, tab == 0);
+        UiStyle.button(host, dayTabButton, tab == 1);
+        UiStyle.button(host, monthTabButton, tab == 2);
+        weekTabButton.setEnabled(tab != 0);
+        dayTabButton.setEnabled(tab != 1);
+        monthTabButton.setEnabled(tab != 2);
+        if (tab == 0) refreshWeek();
+        else if (tab == 1) refreshDay();
+        else refreshMonth();
+    }
+
     private void refreshDay() {
+        if (selectedDateButton == null || daySummary == null) return;
         selectedDateButton.setText(selectedDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd E", Locale.CHINA)));
-        deductCheck.setChecked(isDeducted(selectedDate));
         float hours = getHours(selectedDate);
         float before = getWageBeforeDeduction(selectedDate);
         float after = getWageForDate(selectedDate);
