@@ -1,28 +1,29 @@
 package com.example.workhours;
 
-import android.app.AlarmManager;
-import android.app.PendingIntent;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.os.Build;
-import android.provider.Settings;
+import android.provider.AlarmClock;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Month;
-import java.time.ZoneId;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.TemporalAdjusters;
+import java.time.temporal.WeekFields;
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 public final class WorkAlarmManager {
     public static final String ENABLED_KEY = "work_alarm_enabled";
-    public static final String ALARM_LABEL = "上班闹钟";
+    public static final String ALARM_LABEL = "上班闹钟（WorkHoursApp）";
 
     private static final String PREFS = "work_hours_prefs";
     private static final String START_TIME_KEY = "start_time";
@@ -31,80 +32,93 @@ public final class WorkAlarmManager {
     private static final String LEAVE_PREFIX = "leave_";
     private static final String REST_PREFIX = "rest_";
     private static final String OVERRIDE_PREFIX = "hours_";
-    private static final int REQUEST_CODE = 7001;
+    private static final String LAST_SYNC_SIGNATURE_KEY = "work_alarm_last_sync_signature";
 
     private WorkAlarmManager() { }
 
+    /**
+     * Synchronizes the coming ISO week to the phone's alarm-clock app.
+     * The WorkHours app never rings by itself; the clock app owns the actual alarm.
+     */
     public static boolean sync(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (!prefs.getBoolean(ENABLED_KEY, false)) {
-            cancel(context);
+            prefs.edit().remove(LAST_SYNC_SIGNATURE_KEY).apply();
             return true;
         }
-        if (!canScheduleExact(context)) return false;
 
         LocalTime workTime = parseTime(prefs.getString(START_TIME_KEY, "09:00"));
         if (workTime == null) return false;
 
-        LocalDateTime now = LocalDateTime.now();
-        LocalDate next = findNextWorkDate(prefs, now, workTime);
-        if (next == null) return false;
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        LocalDate sunday = monday.plusDays(6);
 
-        LocalDateTime triggerDateTime = LocalDateTime.of(next, workTime);
-        long triggerAtMillis = triggerDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        ArrayList<Integer> days = new ArrayList<>();
+        int mask = 0;
+        for (LocalDate d = monday; !d.isAfter(sunday); d = d.plusDays(1)) {
+            // Do not add an alarm occurrence that has already passed this week.
+            if (d.isBefore(today)) continue;
+            if (d.equals(today) && !workTime.isAfter(LocalTime.now())) continue;
+            if (!isWorkAlarmDay(prefs, d)) continue;
 
-        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (alarmManager == null) return false;
-
-        PendingIntent operation = alarmPendingIntent(context);
-        Intent showIntent = new Intent(context, MainActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent show = PendingIntent.getActivity(
-                context, REQUEST_CODE + 1, showIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-
-        alarmManager.cancel(operation);
-        AlarmManager.AlarmClockInfo info = new AlarmManager.AlarmClockInfo(triggerAtMillis, show);
-        alarmManager.setAlarmClock(info, operation);
-        return true;
-    }
-
-    public static void cancel(Context context) {
-        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (alarmManager != null) alarmManager.cancel(alarmPendingIntent(context));
-    }
-
-    public static boolean canScheduleExact(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true;
-        AlarmManager alarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        return alarmManager != null && alarmManager.canScheduleExactAlarms();
-    }
-
-    public static void requestExactAlarmPermission(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return;
-        try {
-            Intent intent = new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                    .setData(android.net.Uri.parse("package:" + context.getPackageName()))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
-        } catch (Exception ignored) { }
-    }
-
-    private static PendingIntent alarmPendingIntent(Context context) {
-        Intent intent = new Intent(context, WorkAlarmActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        return PendingIntent.getActivity(
-                context, REQUEST_CODE, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-    }
-
-    private static LocalDate findNextWorkDate(SharedPreferences prefs, LocalDateTime now, LocalTime workTime) {
-        LocalDate date = now.toLocalDate();
-        for (int i = 0; i < 370; i++, date = date.plusDays(1)) {
-            if (i == 0 && !LocalDateTime.of(date, workTime).isAfter(now)) continue;
-            if (isWorkAlarmDay(prefs, date)) return date;
+            int calendarDay = toCalendarDay(d.getDayOfWeek());
+            days.add(calendarDay);
+            mask |= 1 << (d.getDayOfWeek().getValue() - 1);
         }
-        return null;
+
+        WeekFields wf = WeekFields.ISO;
+        int week = today.get(wf.weekOfWeekBasedYear());
+        int weekYear = today.get(wf.weekBasedYear());
+        String signature = weekYear + "-W" + week + "|"
+                + workTime + "|" + mask;
+
+        if (signature.equals(prefs.getString(LAST_SYNC_SIGNATURE_KEY, ""))) {
+            return true;
+        }
+
+        if (days.isEmpty()) {
+            // There is no valid work day left in this week. Mark this week as synchronized;
+            // the next visible app session in a new ISO week will calculate a new rule.
+            prefs.edit().putString(LAST_SYNC_SIGNATURE_KEY, signature).apply();
+            return true;
+        }
+
+        Intent intent = new Intent(AlarmClock.ACTION_SET_ALARM)
+                .putExtra(AlarmClock.EXTRA_MESSAGE, ALARM_LABEL)
+                .putExtra(AlarmClock.EXTRA_HOUR, workTime.getHour())
+                .putExtra(AlarmClock.EXTRA_MINUTES, workTime.getMinute())
+                .putExtra(AlarmClock.EXTRA_DAYS, days)
+                .putExtra(AlarmClock.EXTRA_SKIP_UI, true);
+
+        if (!(context instanceof Activity)) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        }
+        if (intent.resolveActivity(context.getPackageManager()) == null) return false;
+
+        try {
+            context.startActivity(intent);
+            prefs.edit().putString(LAST_SYNC_SIGNATURE_KEY, signature).apply();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Force a resync after the user changes a date or work rule. */
+    public static boolean forceSync(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        prefs.edit().remove(LAST_SYNC_SIGNATURE_KEY).apply();
+        return sync(context);
+    }
+
+    /**
+     * Public AlarmClock intents do not provide a reliable cross-vendor API for deleting a
+     * repeating alarm. Disabling this feature therefore stops future automatic writes only.
+     */
+    public static void cancel(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        prefs.edit().remove(LAST_SYNC_SIGNATURE_KEY).apply();
     }
 
     private static boolean isWorkAlarmDay(SharedPreferences prefs, LocalDate date) {
@@ -120,6 +134,18 @@ public final class WorkAlarmManager {
         int dayIndex = date.getDayOfWeek().getValue() - 1;
         if (!prefs.getBoolean("day_" + dayIndex, dayIndex < 5)) return false;
         return !getMonthlyRestDays(prefs).contains(date.getDayOfMonth());
+    }
+
+    private static int toCalendarDay(DayOfWeek day) {
+        switch (day) {
+            case MONDAY: return Calendar.MONDAY;
+            case TUESDAY: return Calendar.TUESDAY;
+            case WEDNESDAY: return Calendar.WEDNESDAY;
+            case THURSDAY: return Calendar.THURSDAY;
+            case FRIDAY: return Calendar.FRIDAY;
+            case SATURDAY: return Calendar.SATURDAY;
+            default: return Calendar.SUNDAY;
+        }
     }
 
     private static Set<Integer> getMonthlyRestDays(SharedPreferences prefs) {
