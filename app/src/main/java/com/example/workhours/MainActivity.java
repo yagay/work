@@ -109,6 +109,26 @@ public class MainActivity extends Activity {
         settings.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         top.addView(settings, new LinearLayout.LayoutParams(dp(86), dp(48)));
 
+        LinearLayout quickSwitch = horizontal();
+        LinearLayout.LayoutParams quickSwitchParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+        quickSwitchParams.topMargin = dp(14);
+        root.addView(quickSwitch, quickSwitchParams);
+        Button workTab = button("工时统计");
+        UiStyle.button(this, workTab, true);
+        workTab.setEnabled(false);
+        quickSwitch.addView(workTab, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        Button wageTab = button("工资统计");
+        UiStyle.button(this, wageTab, false);
+        wageTab.setOnClickListener(v -> {
+            Intent intent = new Intent(this, WageActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        LinearLayout.LayoutParams wageTabParams = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        wageTabParams.leftMargin = dp(8);
+        quickSwitch.addView(wageTab, wageTabParams);
+
         buildMonthSection(root);
 
         TextView statsTitle = text("更多统计", 19, true);

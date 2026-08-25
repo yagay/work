@@ -110,6 +110,26 @@ public class WageActivity extends Activity {
         top.addView(back, new LinearLayout.LayoutParams(dp(58), dp(48)));
         top.addView(text("工资统计", 25, true), new LinearLayout.LayoutParams(0, -2, 1f));
 
+        LinearLayout quickSwitch = horizontal();
+        LinearLayout.LayoutParams quickSwitchParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(48));
+        quickSwitchParams.topMargin = dp(14);
+        root.addView(quickSwitch, quickSwitchParams);
+        Button workTab = button("工时统计");
+        UiStyle.button(this, workTab, false);
+        workTab.setOnClickListener(v -> {
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            startActivity(intent);
+        });
+        quickSwitch.addView(workTab, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        Button wageTab = button("工资统计");
+        UiStyle.button(this, wageTab, true);
+        wageTab.setEnabled(false);
+        LinearLayout.LayoutParams wageTabParams = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        wageTabParams.leftMargin = dp(8);
+        quickSwitch.addView(wageTab, wageTabParams);
+
         TextView settingsTitle = text("工资设置", 19, true);
         settingsTitle.setPadding(0, dp(18), 0, dp(6));
         root.addView(settingsTitle);
