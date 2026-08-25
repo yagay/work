@@ -1,0 +1,21 @@
+name: Fix wage Intent import
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tools/fix_wage_intent_import.py
+      - run: |
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add app/src/main/java/com/example/workhours/WageActivity.java
+            git commit -m "Fix wage quick switch Intent import"
+            git push
+          fi
