@@ -615,36 +615,8 @@ public class WagePanel extends LinearLayout {
         return d.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
     }
 
-    private boolean isBankHoliday(LocalDate d) { return getBankHolidayName(d) != null; }
-
-    private String getBankHolidayName(LocalDate date) {
-        int year = date.getYear();
-        LocalDate newYear = observedDate(LocalDate.of(year, Month.JANUARY, 1));
-        if (date.equals(newYear)) return "New Year’s Day";
-        LocalDate easter = easterSunday(year);
-        if (date.equals(easter.minusDays(2))) return "Good Friday";
-        if (date.equals(easter.plusDays(1))) return "Easter Monday";
-        LocalDate earlyMay = LocalDate.of(year, Month.MAY, 1).with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY));
-        if (date.equals(earlyMay)) return "Early May bank holiday";
-        LocalDate spring = LocalDate.of(year, Month.MAY, 31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        if (date.equals(spring)) return "Spring bank holiday";
-        LocalDate summer = LocalDate.of(year, Month.AUGUST, 31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
-        if (date.equals(summer)) return "Summer bank holiday";
-        LocalDate christmas = LocalDate.of(year, Month.DECEMBER, 25);
-        LocalDate boxing = LocalDate.of(year, Month.DECEMBER, 26);
-        LocalDate oc, ob;
-        if (christmas.getDayOfWeek() == DayOfWeek.SATURDAY) {
-            oc = LocalDate.of(year, Month.DECEMBER, 27); ob = LocalDate.of(year, Month.DECEMBER, 28);
-        } else if (christmas.getDayOfWeek() == DayOfWeek.SUNDAY) {
-            oc = LocalDate.of(year, Month.DECEMBER, 27); ob = LocalDate.of(year, Month.DECEMBER, 26);
-        } else {
-            oc = christmas;
-            ob = boxing.getDayOfWeek() == DayOfWeek.SATURDAY ? LocalDate.of(year, Month.DECEMBER, 28) : boxing;
-        }
-        if (date.equals(oc)) return "Christmas Day";
-        if (date.equals(ob)) return "Boxing Day";
-        return null;
-    }
+    private boolean isBankHoliday(LocalDate d) { return HolidayCalendar.isHoliday(prefs, d); }
+    private String getBankHolidayName(LocalDate d) { return HolidayCalendar.getHolidayName(prefs, d); }
 
     private LocalDate observedDate(LocalDate d) {
         if (d.getDayOfWeek() == DayOfWeek.SATURDAY) return d.plusDays(2);

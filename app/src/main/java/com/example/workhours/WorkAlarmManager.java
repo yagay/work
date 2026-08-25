@@ -142,7 +142,7 @@ public final class WorkAlarmManager {
     private static boolean isWorkAlarmDay(SharedPreferences prefs, LocalDate date) {
         LocalDate workStart = parseDate(prefs.getString(WORK_START_DATE_KEY, ""));
         if (workStart != null && date.isBefore(workStart)) return false;
-        if (isBankHoliday(date)) return false;
+        if (HolidayCalendar.isHoliday(prefs, date)) return false;
         if (prefs.getBoolean(LEAVE_PREFIX + date, false)) return false;
         if (prefs.getBoolean(REST_PREFIX + date, false)) return false;
 

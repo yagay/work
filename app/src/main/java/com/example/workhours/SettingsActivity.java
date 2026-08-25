@@ -74,6 +74,8 @@ public class SettingsActivity extends Activity {
     private TextView monthlyRestMonthTitle;
     private java.time.YearMonth displayedRestMonth;
     private String restRuleMode = "weekly";
+    private String holidayRegion = HolidayCalendar.DEFAULT_REGION;
+    private Button holidayRegionButton;
     private LinearLayout alarmOptionsGroup;
     private TextView previewText;
     private Button workStartDateButton;
@@ -223,6 +225,17 @@ public class SettingsActivity extends Activity {
         startInput.addTextChangedListener(hoursWatcher);
         endInput.addTextChangedListener(hoursWatcher);
         breakInput.addTextChangedListener(hoursWatcher);
+
+        TextView holidayTitle = text("公共假日", 17, true);
+        holidayTitle.setPadding(0, dp(24), 0, dp(6));
+        root.addView(holidayTitle);
+        TextView holidayInfo = text("选择国家或地区后，公共假日会自动从工时、工资和上班闹钟中排除。", 13, false);
+        holidayInfo.setPadding(0, 0, 0, dp(8));
+        root.addView(holidayInfo);
+        holidayRegionButton = new Button(this);
+        UiStyle.button(this, holidayRegionButton, false);
+        holidayRegionButton.setOnClickListener(v -> chooseHolidayRegion());
+        root.addView(holidayRegionButton, new LinearLayout.LayoutParams(-1, dp(50)));
 
         TextView restRuleTitle = text("休息规则", 17, true);
         restRuleTitle.setPadding(0, dp(24), 0, dp(8));
@@ -579,6 +592,27 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private void chooseHolidayRegion() {
+        String[] regions = HolidayCalendar.regions();
+        String[] labels = HolidayCalendar.labels();
+        int selected = 0;
+        for (int i=0;i<regions.length;i++) if (regions[i].equals(holidayRegion)) { selected=i; break; }
+        final int[] choice = {selected};
+        new AlertDialog.Builder(this)
+                .setTitle("公共假日国家 / 地区")
+                .setSingleChoiceItems(labels, selected, (dialog, which) -> choice[0] = which)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确定", (dialog, which) -> {
+                    holidayRegion = regions[choice[0]];
+                    updateHolidayRegionButton();
+                })
+                .show();
+    }
+
+    private void updateHolidayRegionButton() {
+        if (holidayRegionButton != null) holidayRegionButton.setText(HolidayCalendar.label(holidayRegion) + "  ›");
+    }
+
     private void setRestRuleMode(String mode) {
         restRuleMode = "monthly".equals(mode) ? "monthly" : "weekly";
         boolean monthly = "monthly".equals(restRuleMode);
@@ -735,6 +769,7 @@ public class SettingsActivity extends Activity {
         breakInput.setText(String.valueOf(prefs.getInt(BREAK_MINUTES_KEY, 30)));
         monthlyRestInput.setText(prefs.getString(MONTHLY_REST_DAYS_KEY, ""));
         restRuleMode = prefs.getString(REST_RULE_MODE_KEY, "weekly");
+        holidayRegion = prefs.getString(HolidayCalendar.REGION_KEY, HolidayCalendar.DEFAULT_REGION);
         if (!"monthly".equals(restRuleMode)) restRuleMode = "weekly";
         displayedRestMonth = java.time.YearMonth.now();
         workAlarmCheck.setChecked(prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false));
@@ -746,6 +781,7 @@ public class SettingsActivity extends Activity {
         alarmOptionsGroup.setVisibility(workAlarmCheck.isChecked()
                 ? android.view.View.VISIBLE : android.view.View.GONE);
         updateMonthlyRestButton();
+        updateHolidayRegionButton();
         setRestRuleMode(restRuleMode);
         rebuildMonthlyRestCalendar();
         ensureWageHistoryMigrated();
@@ -1057,6 +1093,7 @@ public class SettingsActivity extends Activity {
                 .putFloat("daily_hours", dailyHours)
                 .putString(MONTHLY_REST_DAYS_KEY, monthlyRestDays)
                 .putString(REST_RULE_MODE_KEY, restRuleMode)
+                .putString(HolidayCalendar.REGION_KEY, holidayRegion)
                 .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked())
                 .putBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, followWorkTime)
                 .putString(WorkAlarmManager.ALARM_TIME_KEY, alarmTime)
