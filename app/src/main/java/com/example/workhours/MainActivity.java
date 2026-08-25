@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
     private YearMonth displayedMonth;
     private LocalDate displayedWeekStart;
     private LocalDate rangeStart, rangeEnd;
-    private TextView monthTitle, totalHoursText, workDaysText, leaveDaysText, holidayDaysText, restDaysText;
+    private TextView monthTitle, totalHoursText, statusStatsText;
     private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
     private GridLayout calendarGrid;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
@@ -140,23 +140,10 @@ public class MainActivity extends Activity {
         card.addView(text("本月总工时（含加班）", 13, false));
         totalHoursText = text("", 32, true); totalHoursText.setPadding(0, dp(3), 0, dp(10)); card.addView(totalHoursText);
 
-        LinearLayout statsRows = vertical();
-        card.addView(statsRows);
-        LinearLayout statsRow1 = horizontal();
-        LinearLayout statsRow2 = horizontal();
-        statsRows.addView(statsRow1);
-        LinearLayout.LayoutParams row2Params = new LinearLayout.LayoutParams(-1, -2);
-        row2Params.topMargin = dp(8);
-        statsRows.addView(statsRow2, row2Params);
-
-        workDaysText = statLineText();
-        leaveDaysText = statLineText();
-        holidayDaysText = statLineText();
-        restDaysText = statLineText();
-        statsRow1.addView(workDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow1.addView(leaveDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow2.addView(holidayDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow2.addView(restDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
+        statusStatsText = statLineText();
+        statusStatsText.setTextSize(13);
+        statusStatsText.setGravity(Gravity.CENTER);
+        card.addView(statusStatsText);
 
         TextView ct = text("月历", 19, true); ct.setPadding(0, dp(22), 0, dp(8)); root.addView(ct);
         calendarGrid = new GridLayout(this); calendarGrid.setColumnCount(7); calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS); root.addView(calendarGrid);
@@ -196,10 +183,8 @@ public class MainActivity extends Activity {
         previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first)); nextMonthButton.setEnabled(displayedMonth.isBefore(now));
         LocalDate start = displayedMonth.atDay(1); if (ws != null && start.isBefore(ws)) start = ws; LocalDate end = displayedMonth.equals(now) ? today : displayedMonth.atEndOfMonth();
         Stats s = collectStats(start, end); totalHoursText.setText(formatDurationHours(s.totalHours));
-        workDaysText.setText("工作  " + s.workDays + "天");
-        leaveDaysText.setText("请假  " + s.leaveDays + "天");
-        holidayDaysText.setText("公共假日  " + s.holidayDays + "天");
-        restDaysText.setText("休息  " + s.restDays + "天");
+        statusStatsText.setText(StatusStatsFormatter.format(
+                s.workDays, s.leaveDays, s.holidayDays, s.restDays));
         rebuildCalendar(today); rebuildExceptions(end);
     }
 
@@ -211,7 +196,9 @@ public class MainActivity extends Activity {
         previousWeekButton.setEnabled(first == null || displayedWeekStart.isAfter(first)); nextWeekButton.setEnabled(displayedWeekStart.isBefore(cur)); weekDetailsContainer.removeAllViews();
         if (start.isAfter(end)) { weekSummaryText.setText("本周尚未开始工作"); return; }
         Stats s = collectStats(start, end);
-        weekSummaryText.setText("总工时：" + formatDurationHours(s.totalHours) + "（其中加班 " + formatDurationHours(s.overtimeHours) + "）\n工作：" + s.workDays + "天 · 请假：" + s.leaveDays + "天 · 公共假日：" + s.holidayDays + "天 · 休息：" + s.restDays + "天");
+        weekSummaryText.setText("总工时：" + formatDurationHours(s.totalHours)
+                + "（其中加班 " + formatDurationHours(s.overtimeHours) + "）\n"
+                + StatusStatsFormatter.format(s.workDays, s.leaveDays, s.holidayDays, s.restDays));
         addPeriodDetails(weekDetailsContainer, start, end, true, true);
     }
 
@@ -285,7 +272,7 @@ public class MainActivity extends Activity {
 
     private void showDatePicker(boolean startPicker){LocalDate initial=startPicker?rangeStart:rangeEnd,today=LocalDate.now(),ws=getWorkStartDate();if(ws!=null&&initial.isBefore(ws))initial=ws;DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate s=LocalDate.of(y,m+1,day);if(s.isAfter(today))s=today;if(ws!=null&&s.isBefore(ws))s=ws;if(startPicker)rangeStart=s;else rangeEnd=s;updateRangeButtons();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
     private void updateRangeButtons(){DateTimeFormatter f=DateTimeFormatter.ofPattern("yyyy-MM-dd");rangeStartButton.setText(rangeStart.format(f));rangeEndButton.setText(rangeEnd.format(f));}
-    private void calculateRange(){if(rangeDetailsContainer==null)return;rangeDetailsContainer.removeAllViews();LocalDate today=LocalDate.now(),ws=getWorkStartDate(),start=rangeStart,end=rangeEnd.isAfter(today)?today:rangeEnd;if(ws!=null&&start.isBefore(ws))start=ws;if(start.isAfter(end)){rangeSummaryText.setText("开始日期不能晚于结束日期");return;}Stats s=collectStats(start,end);rangeSummaryText.setText(start+" 至 "+end+"\n总工时："+formatDurationHours(s.totalHours)+"（加班 "+formatDurationHours(s.overtimeHours)+"）\n工作："+s.workDays+"天 · 请假："+s.leaveDays+"天 · 公共假日："+s.holidayDays+"天 · 休息："+s.restDays+"天");addPeriodDetails(rangeDetailsContainer,start,end,false,true);}
+    private void calculateRange(){if(rangeDetailsContainer==null)return;rangeDetailsContainer.removeAllViews();LocalDate today=LocalDate.now(),ws=getWorkStartDate(),start=rangeStart,end=rangeEnd.isAfter(today)?today:rangeEnd;if(ws!=null&&start.isBefore(ws))start=ws;if(start.isAfter(end)){rangeSummaryText.setText("开始日期不能晚于结束日期");return;}Stats s=collectStats(start,end);rangeSummaryText.setText(start+" 至 "+end+"\n总工时："+formatDurationHours(s.totalHours)+"（加班 "+formatDurationHours(s.overtimeHours)+"）\n"+StatusStatsFormatter.format(s.workDays,s.leaveDays,s.holidayDays,s.restDays));addPeriodDetails(rangeDetailsContainer,start,end,false,true);}
     private Stats collectStats(LocalDate start,LocalDate end){Stats s=new Stats();if(start==null||end==null||start.isAfter(end))return s;float daily=getConfiguredDailyHours();LocalDate ws=getWorkStartDate();for(LocalDate d=start;!d.isAfter(end);d=d.plusDays(1)){if(ws!=null&&d.isBefore(ws))continue;boolean h=isBankHoliday(d),l=!h&&isLeave(d),r=!h&&!l&&isManualRest(d),c=isConfiguredWorkDay(d)&&!h,o=!h&&!l&&!r&&hasOverride(d),a=!h&&!l&&!r&&!o&&!c;float base=getBaseHoursForDate(d,daily,c),ot=getOvertimeHours(d);s.totalHours+=base+ot;s.overtimeHours+=ot;if(base+ot>0)s.workDays++;if(l)s.leaveDays++;if(h)s.holidayDays++;if(r||a)s.restDays++;if(o)s.overrideDays++;}return s;}
     private static class Stats{float totalHours,overtimeHours;int workDays,leaveDays,holidayDays,restDays,overrideDays;}
 
