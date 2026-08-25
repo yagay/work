@@ -5,9 +5,6 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -32,74 +29,10 @@ jobs:
         with:
           gradle-version: '9.4.1'
 
-      - name: Apply source fixes
-        shell: bash
+      - name: Fix Android view imports for build
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          app = Path('app/src/main/java/com/example/workhours/WorkHoursApplication.java')
-          s = app.read_text()
-          s = s.replace('import android.app.ActionMode;', 'import android.view.ActionMode;')
-          s = s.replace('import android.app.SearchEvent;', 'import android.view.SearchEvent;')
-          app.write_text(s)
-
-          main = Path('app/src/main/java/com/example/workhours/MainActivity.java')
-          s = main.read_text()
-          old = '''        LinearLayout statsRows = vertical();
-        card.addView(statsRows);
-        LinearLayout statsRow1 = horizontal();
-        LinearLayout statsRow2 = horizontal();
-        statsRows.addView(statsRow1);
-        LinearLayout.LayoutParams row2Params = new LinearLayout.LayoutParams(-1, -2);
-        row2Params.topMargin = dp(8);
-        statsRows.addView(statsRow2, row2Params);
-
-        workDaysText = statLineText();
-        leaveDaysText = statLineText();
-        holidayDaysText = statLineText();
-        restDaysText = statLineText();
-        statsRow1.addView(workDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow1.addView(leaveDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow2.addView(holidayDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow2.addView(restDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-'''
-          new = '''        LinearLayout statsRow = horizontal();
-        statsRow.setGravity(Gravity.CENTER_VERTICAL);
-        card.addView(statsRow);
-
-        workDaysText = statLineText();
-        leaveDaysText = statLineText();
-        holidayDaysText = statLineText();
-        restDaysText = statLineText();
-        workDaysText.setGravity(Gravity.CENTER);
-        leaveDaysText.setGravity(Gravity.CENTER);
-        holidayDaysText.setGravity(Gravity.CENTER);
-        restDaysText.setGravity(Gravity.CENTER);
-        workDaysText.setTextSize(13);
-        leaveDaysText.setTextSize(13);
-        holidayDaysText.setTextSize(13);
-        restDaysText.setTextSize(13);
-        statsRow.addView(workDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow.addView(leaveDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow.addView(holidayDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-        statsRow.addView(restDaysText, new LinearLayout.LayoutParams(0, -2, 1f));
-'''
-          if old in s:
-              s = s.replace(old, new)
-          main.write_text(s)
-          PY
-
-      - name: Commit source fixes
-        shell: bash
-        run: |
-          if ! git diff --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add app/src/main/java/com/example/workhours/MainActivity.java app/src/main/java/com/example/workhours/WorkHoursApplication.java
-            git commit -m "Keep monthly stats on one row"
-            git push
-          fi
+          sed -i 's/import android\.app\.ActionMode;/import android.view.ActionMode;/' app/src/main/java/com/example/workhours/WorkHoursApplication.java
+          sed -i 's/import android\.app\.SearchEvent;/import android.view.SearchEvent;/' app/src/main/java/com/example/workhours/WorkHoursApplication.java
 
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
