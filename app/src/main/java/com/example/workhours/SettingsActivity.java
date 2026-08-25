@@ -15,6 +15,7 @@ import android.view.Gravity;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.GridLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -734,7 +735,7 @@ public class SettingsActivity extends Activity {
 
     private void updatePreview(boolean showError) {
         Float value = calculate(showError);
-        if (value != null) previewText.setText("正常工作日自动计入：" + formatDurationHours(value));
+        if (value != null) previewText.setText(formatDurationHours(value));
     }
 
     private Float calculate(boolean showError) {
