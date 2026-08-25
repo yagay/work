@@ -76,6 +76,7 @@ public class SettingsActivity extends Activity {
     private String restRuleMode = "weekly";
     private String holidayRegion = HolidayCalendar.DEFAULT_REGION;
     private Button holidayRegionButton;
+    private LinearLayout holidayHistoryContainer;
     private LinearLayout alarmOptionsGroup;
     private TextView previewText;
     private Button workStartDateButton;
@@ -236,6 +237,12 @@ public class SettingsActivity extends Activity {
         UiStyle.button(this, holidayRegionButton, false);
         holidayRegionButton.setOnClickListener(v -> chooseHolidayRegion());
         root.addView(holidayRegionButton, new LinearLayout.LayoutParams(-1, dp(50)));
+        TextView holidayHistoryTitle = text("公共假日历史", 14, true);
+        holidayHistoryTitle.setPadding(0, dp(10), 0, dp(5));
+        root.addView(holidayHistoryTitle);
+        holidayHistoryContainer = new LinearLayout(this);
+        holidayHistoryContainer.setOrientation(LinearLayout.VERTICAL);
+        root.addView(holidayHistoryContainer);
 
         TextView restRuleTitle = text("休息规则", 17, true);
         restRuleTitle.setPadding(0, dp(24), 0, dp(8));
@@ -592,25 +599,117 @@ public class SettingsActivity extends Activity {
         }
     }
 
+    private JSONArray readHolidayHistory() {
+        String raw = prefs.getString(HolidayCalendar.HISTORY_KEY, "");
+        if (raw == null || raw.trim().isEmpty()) return new JSONArray();
+        try { return new JSONArray(raw); }
+        catch (Exception e) { return new JSONArray(); }
+    }
+
+    private void ensureHolidayHistoryMigrated() {
+        JSONArray existing = readHolidayHistory();
+        if (existing.length() > 0) return;
+        String region = prefs.getString(HolidayCalendar.REGION_KEY, HolidayCalendar.DEFAULT_REGION);
+        if (region == null) region = HolidayCalendar.DEFAULT_REGION;
+        String start = prefs.getString(WORK_START_DATE_KEY, "");
+        if (start == null || start.isEmpty()) start = "1970-01-01";
+        try {
+            JSONArray arr = new JSONArray();
+            JSONObject item = new JSONObject();
+            item.put("effectiveDate", start);
+            item.put("region", region);
+            arr.put(item);
+            prefs.edit().putString(HolidayCalendar.HISTORY_KEY, arr.toString()).apply();
+        } catch (Exception ignored) { }
+    }
+
     private void chooseHolidayRegion() {
         String[] regions = HolidayCalendar.regions();
         String[] labels = HolidayCalendar.labels();
+        String current = HolidayCalendar.regionForDate(prefs, LocalDate.now());
         int selected = 0;
-        for (int i=0;i<regions.length;i++) if (regions[i].equals(holidayRegion)) { selected=i; break; }
+        for (int i=0;i<regions.length;i++) if (regions[i].equals(current)) { selected=i; break; }
         final int[] choice = {selected};
         new AlertDialog.Builder(this)
-                .setTitle("公共假日国家 / 地区")
+                .setTitle("选择新的公共假日国家 / 地区")
                 .setSingleChoiceItems(labels, selected, (dialog, which) -> choice[0] = which)
                 .setNegativeButton("取消", null)
-                .setPositiveButton("确定", (dialog, which) -> {
-                    holidayRegion = regions[choice[0]];
-                    updateHolidayRegionButton();
-                })
+                .setPositiveButton("下一步", (dialog, which) -> chooseHolidayEffectiveDate(regions[choice[0]]))
                 .show();
     }
 
+    private void chooseHolidayEffectiveDate(String region) {
+        LocalDate initial = LocalDate.now();
+        DatePickerDialog picker = new DatePickerDialog(this, (view, y, m, d) -> {
+            LocalDate effective = LocalDate.of(y, m + 1, d);
+            saveHolidayRule(effective, region);
+        }, initial.getYear(), initial.getMonthValue()-1, initial.getDayOfMonth());
+        LocalDate ws = getSavedWorkStartDate();
+        if (ws != null) picker.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());
+        picker.setTitle("选择生效日期");
+        picker.show();
+    }
+
+    private void saveHolidayRule(LocalDate effective, String region) {
+        JSONArray arr = readHolidayHistory();
+        JSONArray out = new JSONArray();
+        for (int i=0;i<arr.length();i++) {
+            JSONObject old = arr.optJSONObject(i);
+            if (old == null || effective.toString().equals(old.optString("effectiveDate", ""))) continue;
+            out.put(old);
+        }
+        try {
+            JSONObject item = new JSONObject();
+            item.put("effectiveDate", effective.toString());
+            item.put("region", region);
+            out.put(item);
+        } catch (Exception e) { return; }
+        prefs.edit().putString(HolidayCalendar.HISTORY_KEY, out.toString()).putString(HolidayCalendar.REGION_KEY, region).apply();
+        holidayRegion = HolidayCalendar.regionForDate(prefs, LocalDate.now());
+        updateHolidayRegionButton();
+        refreshHolidayHistoryUi();
+        WorkAlarmManager.forceSync(this);
+        Toast.makeText(this, "公共假日设置已保存，从 " + effective + " 起生效", Toast.LENGTH_LONG).show();
+    }
+
+    private void refreshHolidayHistoryUi() {
+        if (holidayHistoryContainer == null) return;
+        ensureHolidayHistoryMigrated();
+        JSONArray arr = readHolidayHistory();
+        java.util.ArrayList<JSONObject> rows = new java.util.ArrayList<>();
+        for (int i=0;i<arr.length();i++) { JSONObject o=arr.optJSONObject(i); if(o!=null) rows.add(o); }
+        rows.sort((a,b)->b.optString("effectiveDate","").compareTo(a.optString("effectiveDate","")));
+        holidayHistoryContainer.removeAllViews();
+        for (JSONObject item: rows) {
+            String date=item.optString("effectiveDate","");
+            String region=item.optString("region",HolidayCalendar.DEFAULT_REGION);
+            LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(11),dp(8),dp(8),dp(8)); row.setBackground(UiStyle.roundRect(this,UiStyle.CARD_BG,12,UiStyle.BORDER,1));
+            LinearLayout info=new LinearLayout(this); info.setOrientation(LinearLayout.VERTICAL);
+            info.addView(text(HolidayCalendar.label(region),14,true));
+            info.addView(text(date+" 起生效",12,false));
+            row.addView(info,new LinearLayout.LayoutParams(0,-2,1f));
+            Button del=new Button(this); del.setText("删除"); del.setTextSize(12); UiStyle.button(this,del,false);
+            del.setOnClickListener(v->confirmDeleteHolidayRule(date));
+            row.addView(del,new LinearLayout.LayoutParams(dp(70),dp(40)));
+            LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(-1,-2); rp.bottomMargin=dp(6); holidayHistoryContainer.addView(row,rp);
+        }
+    }
+
+    private void confirmDeleteHolidayRule(String date) {
+        JSONArray arr=readHolidayHistory();
+        if(arr.length()<=1){Toast.makeText(this,"至少保留一条公共假日历史",Toast.LENGTH_SHORT).show();return;}
+        new AlertDialog.Builder(this).setTitle("删除这条公共假日历史？").setMessage(date+" 起的规则将被删除，之后会使用更早一条有效规则。")
+                .setNegativeButton("取消",null).setPositiveButton("删除",(d,w)->{
+                    JSONArray out=new JSONArray();
+                    for(int i=0;i<arr.length();i++){JSONObject o=arr.optJSONObject(i);if(o!=null&&!date.equals(o.optString("effectiveDate","")))out.put(o);}
+                    prefs.edit().putString(HolidayCalendar.HISTORY_KEY,out.toString()).apply();
+                    holidayRegion=HolidayCalendar.regionForDate(prefs,LocalDate.now()); updateHolidayRegionButton(); refreshHolidayHistoryUi(); WorkAlarmManager.forceSync(this);
+                }).show();
+    }
+
     private void updateHolidayRegionButton() {
-        if (holidayRegionButton != null) holidayRegionButton.setText(HolidayCalendar.label(holidayRegion) + "  ›");
+        if (holidayRegionButton != null) holidayRegionButton.setText("当前：" + HolidayCalendar.label(HolidayCalendar.regionForDate(prefs, LocalDate.now())) + "  ›");
     }
 
     private void setRestRuleMode(String mode) {
@@ -769,7 +868,8 @@ public class SettingsActivity extends Activity {
         breakInput.setText(String.valueOf(prefs.getInt(BREAK_MINUTES_KEY, 30)));
         monthlyRestInput.setText(prefs.getString(MONTHLY_REST_DAYS_KEY, ""));
         restRuleMode = prefs.getString(REST_RULE_MODE_KEY, "weekly");
-        holidayRegion = prefs.getString(HolidayCalendar.REGION_KEY, HolidayCalendar.DEFAULT_REGION);
+        ensureHolidayHistoryMigrated();
+        holidayRegion = HolidayCalendar.regionForDate(prefs, LocalDate.now());
         if (!"monthly".equals(restRuleMode)) restRuleMode = "weekly";
         displayedRestMonth = java.time.YearMonth.now();
         workAlarmCheck.setChecked(prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false));
@@ -782,6 +882,7 @@ public class SettingsActivity extends Activity {
                 ? android.view.View.VISIBLE : android.view.View.GONE);
         updateMonthlyRestButton();
         updateHolidayRegionButton();
+        refreshHolidayHistoryUi();
         setRestRuleMode(restRuleMode);
         rebuildMonthlyRestCalendar();
         ensureWageHistoryMigrated();

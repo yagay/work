@@ -277,12 +277,13 @@ public class MainActivity extends Activity {
             if(!future&&!before){
                 if(showingWageStats){
                     value=moneyShort(wage);
-                    if(holiday||leave||manualRest||autoRest) value=wage>0?moneyShort(wage):"£0";
+                    if(holiday) value=(wage>0?moneyShort(wage):"£0")+"\n"+getBankHolidayName(d);
+                    else if(leave||manualRest||autoRest) value=wage>0?moneyShort(wage):"£0";
                 }else{
-                    if(holiday)value="假日"; else if(leave)value="请假"; else if(manualRest||autoRest)value=overtime>0?shortHours(overtime):"休息"; else if(total>0)value=shortHours(total);
+                    if(holiday)value=getBankHolidayName(d); else if(leave)value="请假"; else if(manualRest||autoRest)value=overtime>0?shortHours(overtime):"休息"; else if(total>0)value=shortHours(total);
                 }
             }
-            TextView st=text(value,10,leave||holiday||manualRest||override||autoRest||overtime>0); st.setGravity(Gravity.CENTER); cell.addView(st);
+            TextView st=text(value,10,leave||holiday||manualRest||override||autoRest||overtime>0); st.setGravity(Gravity.CENTER); st.setSingleLine(false); cell.addView(st);
             if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：公共假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
             calendarGrid.addView(cell,gridParams());
         }

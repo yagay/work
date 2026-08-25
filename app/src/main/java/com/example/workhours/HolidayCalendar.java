@@ -2,6 +2,9 @@ package com.example.workhours;
 
 import android.content.SharedPreferences;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.Month;
@@ -11,13 +14,13 @@ import java.util.Set;
 
 public final class HolidayCalendar {
     public static final String REGION_KEY = "holiday_region";
+    public static final String HISTORY_KEY = "holiday_region_history";
     public static final String DEFAULT_REGION = "gb-ew";
 
     private HolidayCalendar() { }
 
     public static String getHolidayName(SharedPreferences prefs, LocalDate date) {
-        String region = prefs.getString(REGION_KEY, DEFAULT_REGION);
-        if (region == null) region = DEFAULT_REGION;
+        String region = regionForDate(prefs, date);
         switch (region) {
             case "none": return null;
             case "gb-sc": return scotland(date);
@@ -28,6 +31,32 @@ public final class HolidayCalendar {
             case "gb-ew":
             default: return englandWales(date);
         }
+    }
+
+    public static String regionForDate(SharedPreferences prefs, LocalDate date) {
+        String raw = prefs.getString(HISTORY_KEY, "");
+        if (raw != null && !raw.trim().isEmpty()) {
+            try {
+                JSONArray arr = new JSONArray(raw);
+                LocalDate bestDate = null;
+                String bestRegion = null;
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject item = arr.optJSONObject(i);
+                    if (item == null) continue;
+                    LocalDate effective;
+                    try { effective = LocalDate.parse(item.optString("effectiveDate", "")); }
+                    catch (Exception ignored) { continue; }
+                    if (effective.isAfter(date)) continue;
+                    if (bestDate == null || effective.isAfter(bestDate)) {
+                        bestDate = effective;
+                        bestRegion = item.optString("region", DEFAULT_REGION);
+                    }
+                }
+                if (bestRegion != null) return bestRegion;
+            } catch (Exception ignored) { }
+        }
+        String region = prefs.getString(REGION_KEY, DEFAULT_REGION);
+        return region == null ? DEFAULT_REGION : region;
     }
 
     public static boolean isHoliday(SharedPreferences prefs, LocalDate date) {

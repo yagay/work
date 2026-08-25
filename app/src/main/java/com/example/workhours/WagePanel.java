@@ -559,7 +559,7 @@ public class WagePanel extends LinearLayout {
     }
 
     private String getDayStatus(LocalDate d) {
-        if (isBankHoliday(d)) return "公共假日";
+        if (isBankHoliday(d)) return "公共假日 · " + getBankHolidayName(d);
         if (isLeave(d)) return "请假";
         if (isManualRest(d)) return "休息";
         if (prefs.contains(OVERRIDE_PREFIX + d) && getHours(d) > 0) return "自定义上班";
