@@ -69,6 +69,7 @@ public class MainActivity extends Activity {
     private WagePanel wagePanel;
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
     private Button rangeStartButton, rangeEndButton;
+    private boolean showingWageStats = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,6 +130,8 @@ public class MainActivity extends Activity {
         wageTabParams.leftMargin = dp(8);
         quickSwitch.addView(wageTabButton, wageTabParams);
 
+        buildSharedCalendar(root);
+
         workContent = vertical();
         wageContent = vertical();
         root.addView(workContent);
@@ -177,6 +180,7 @@ public class MainActivity extends Activity {
 
     private void showStatsTab(boolean wage) {
         if (workContent == null || wageContent == null) return;
+        showingWageStats = wage;
         workContent.setVisibility(wage ? View.GONE : View.VISIBLE);
         wageContent.setVisibility(wage ? View.VISIBLE : View.GONE);
         UiStyle.button(this, workTabButton, !wage);
@@ -184,6 +188,7 @@ public class MainActivity extends Activity {
         workTabButton.setEnabled(wage);
         wageTabButton.setEnabled(!wage);
         if (wage && wagePanel != null) { wagePanel.setDisplayedMonth(displayedMonth); wagePanel.refresh(); }
+        rebuildSharedCalendar(LocalDate.now());
     }
 
     private void buildSharedMonthSummary(LinearLayout root) {
@@ -213,6 +218,64 @@ public class MainActivity extends Activity {
         totalWageText=text("£0.00",25,true); totalWageText.setPadding(0,dp(4),0,dp(4)); wageCard.addView(totalWageText);
         TextView wageHint=text("点击工资统计查看明细",11,false); wageCard.addView(wageHint);
         LinearLayout.LayoutParams wp=new LinearLayout.LayoutParams(0,-2,1f); wp.leftMargin=dp(8); cards.addView(wageCard,wp);
+    }
+
+    private void buildSharedCalendar(LinearLayout root) {
+        TextView title = text("月历", 19, true);
+        title.setPadding(0, dp(18), 0, dp(8));
+        root.addView(title);
+        calendarGrid = new GridLayout(this);
+        calendarGrid.setColumnCount(7);
+        calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
+        root.addView(calendarGrid);
+        TextView hint = text("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录。", 13, false);
+        hint.setPadding(0, dp(8), 0, dp(4));
+        root.addView(hint);
+    }
+
+    private void rebuildSharedCalendar(LocalDate today) {
+        if (calendarGrid == null) return;
+        calendarGrid.removeAllViews();
+        String[] hs={"一","二","三","四","五","六","日"};
+        for(int i=0;i<7;i++){TextView h=text(hs[i],13,true);h.setGravity(Gravity.CENTER);if(i>=5)h.setTextColor(0xFF5F6368);calendarGrid.addView(h,gridParams());}
+        LocalDate ws=getWorkStartDate();
+        int leading=displayedMonth.atDay(1).getDayOfWeek().getValue()-1,days=displayedMonth.lengthOfMonth(),cells=((leading+days+6)/7)*7;
+        float daily=getConfiguredDailyHours();
+        for(int i=0;i<cells;i++){
+            int day=i-leading+1;
+            if(day<1||day>days){calendarGrid.addView(text("",13,false),gridParams());continue;}
+            LocalDate d=displayedMonth.atDay(day);
+            boolean future=d.isAfter(today),before=ws!=null&&d.isBefore(ws),weekend=d.getDayOfWeek()==DayOfWeek.SATURDAY||d.getDayOfWeek()==DayOfWeek.SUNDAY;
+            boolean holiday=!before&&isBankHoliday(d),leave=!holiday&&!before&&isLeave(d),manualRest=!holiday&&!leave&&!before&&isManualRest(d),configured=!before&&isConfiguredWorkDay(d)&&!holiday,override=!holiday&&!leave&&!manualRest&&!before&&hasOverride(d),autoRest=!holiday&&!leave&&!manualRest&&!override&&!before&&!configured;
+            float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured),overtime=(future||before)?0:getOvertimeHours(d),total=normal+overtime;
+            float wage=(future||before||wagePanel==null)?0:wagePanel.getWageForDateValue(d);
+            LinearLayout cell=vertical(); cell.setGravity(Gravity.CENTER); cell.setPadding(dp(2),dp(6),dp(2),dp(5));
+            if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,0xFFE8F0FE,12,0xFFB8C8FF,1));
+            else if(leave)cell.setBackground(UiStyle.roundRect(this,0xFFFFF0F0,12,0xFFF2CACA,1));
+            else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,0xFFF1F8F3,12,0xFFCDE7D4,1));
+            else if(override)cell.setBackground(UiStyle.roundRect(this,0xFFFFF7E8,12,0xFFF1D8A6,1));
+            else if(holiday)cell.setBackground(UiStyle.roundRect(this,0xFFFFF2F4,12,0xFFF3CDD3,1));
+            else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,0xFFF4F6F9,12,0xFFE1E6EE,1));
+            TextView dt=text(String.valueOf(day),14,d.equals(today)); dt.setGravity(Gravity.CENTER); if(future||before)dt.setTextColor(0xFF9AA0A6); cell.addView(dt);
+            String value="";
+            if(!future&&!before){
+                if(showingWageStats){
+                    value=moneyShort(wage);
+                    if(holiday||leave||manualRest||autoRest) value=wage>0?moneyShort(wage):"£0";
+                }else{
+                    if(holiday)value="假日"; else if(leave)value="请假"; else if(manualRest||autoRest)value=overtime>0?shortHours(overtime):"休息"; else if(total>0)value=shortHours(total);
+                }
+            }
+            TextView st=text(value,10,leave||holiday||manualRest||override||autoRest||overtime>0); st.setGravity(Gravity.CENTER); cell.addView(st);
+            if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：公共假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
+            calendarGrid.addView(cell,gridParams());
+        }
+    }
+
+    private String moneyShort(float value) {
+        if (Math.abs(value) < 0.005f) return "£0";
+        if (Math.abs(value - Math.round(value)) < 0.005f) return "£" + Math.round(value);
+        return String.format(Locale.UK, "£%.2f", value);
     }
 
     private void buildWeekSection(LinearLayout root) {
@@ -251,6 +314,7 @@ public class MainActivity extends Activity {
         Stats st=collectStats(start,end); totalHoursText.setText(formatDurationHours(st.totalHours));
         statusStatsText.setText(StatusStatsFormatter.format(st.workDays,st.leaveDays,st.holidayDays,st.restDays));
         if(wagePanel!=null){ wagePanel.setDisplayedMonth(displayedMonth); totalWageText.setText(String.format(Locale.UK,"£%.2f",wagePanel.getDisplayedMonthWage())); }
+        rebuildSharedCalendar(today);
     }
 
     private void refreshWeek() {

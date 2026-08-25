@@ -112,6 +112,10 @@ public class WagePanel extends LinearLayout {
         refreshMonth();
     }
 
+    public float getWageForDateValue(LocalDate date) {
+        return getWageForDate(date);
+    }
+
     public float getDisplayedMonthWage() {
         YearMonth month = displayedMonth;
         LocalDate ws = getWorkStartDate();
