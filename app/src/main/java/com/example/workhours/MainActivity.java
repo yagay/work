@@ -16,6 +16,7 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.GridLayout;
 import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
@@ -61,8 +62,9 @@ public class MainActivity extends Activity {
     private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
     private GridLayout calendarGrid;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
-    private LinearLayout weekSectionContainer, rangeSectionContainer;
+    private LinearLayout monthSectionContainer, weekSectionContainer, rangeSectionContainer;
     private LinearLayout workContent, wageContent;
+    private Button workWeekTabButton, workDateTabButton, workMonthTabButton;
     private Button workTabButton, wageTabButton;
     private WagePanel wagePanel;
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
@@ -136,44 +138,58 @@ public class MainActivity extends Activity {
         wageTabButton.setOnClickListener(v -> showStatsTab(true));
         showStatsTab(false);
 
-        buildMonthSection(workContent);
-
-        TextView statsTitle = text("更多统计", 19, true);
-        statsTitle.setPadding(0, dp(24), 0, dp(8));
-        workContent.addView(statsTitle);
-        LinearLayout statsButtons = horizontal();
-        workContent.addView(statsButtons);
-        Button weekToggle = button("周统计");
-        Button rangeToggle = button("范围统计");
-        statsButtons.addView(weekToggle, new LinearLayout.LayoutParams(0, dp(48), 1f));
-        LinearLayout.LayoutParams rtp = new LinearLayout.LayoutParams(0, dp(48), 1f); rtp.leftMargin = dp(8);
-        statsButtons.addView(rangeToggle, rtp);
+        LinearLayout workViewTabs = horizontal();
+        LinearLayout.LayoutParams workViewTabsParams = new LinearLayout.LayoutParams(-1, dp(46));
+        workViewTabsParams.topMargin = dp(18);
+        workContent.addView(workViewTabs, workViewTabsParams);
+        workWeekTabButton = button("星期");
+        workDateTabButton = button("日期");
+        workMonthTabButton = button("月份");
+        workViewTabs.addView(workWeekTabButton, new LinearLayout.LayoutParams(0, dp(46), 1f));
+        LinearLayout.LayoutParams workDateTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        workDateTabParams.leftMargin = dp(6);
+        workViewTabs.addView(workDateTabButton, workDateTabParams);
+        LinearLayout.LayoutParams workMonthTabParams = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        workMonthTabParams.leftMargin = dp(6);
+        workViewTabs.addView(workMonthTabButton, workMonthTabParams);
 
         weekSectionContainer = vertical();
-        weekSectionContainer.setVisibility(View.GONE);
-        workContent.addView(weekSectionContainer);
-        buildWeekSection(weekSectionContainer);
         rangeSectionContainer = vertical();
-        rangeSectionContainer.setVisibility(View.GONE);
+        monthSectionContainer = vertical();
+        workContent.addView(weekSectionContainer);
         workContent.addView(rangeSectionContainer);
-        buildRangeSection(rangeSectionContainer);
-        weekToggle.setOnClickListener(v -> {
-            boolean show = weekSectionContainer.getVisibility() != View.VISIBLE;
-            weekSectionContainer.setVisibility(show ? View.VISIBLE : View.GONE);
-            if (show) rangeSectionContainer.setVisibility(View.GONE);
-        });
-        rangeToggle.setOnClickListener(v -> {
-            boolean show = rangeSectionContainer.getVisibility() != View.VISIBLE;
-            rangeSectionContainer.setVisibility(show ? View.VISIBLE : View.GONE);
-            if (show) weekSectionContainer.setVisibility(View.GONE);
-        });
+        workContent.addView(monthSectionContainer);
 
+        buildWeekSection(weekSectionContainer);
+        buildRangeSection(rangeSectionContainer);
+        buildMonthSection(monthSectionContainer);
         TextView ex = text("本月异常记录", 19, true);
         ex.setPadding(0, dp(24), 0, dp(8));
-        workContent.addView(ex);
+        monthSectionContainer.addView(ex);
         exceptionsContainer = vertical();
-        workContent.addView(exceptionsContainer);
+        monthSectionContainer.addView(exceptionsContainer);
+
+        workWeekTabButton.setOnClickListener(v -> showWorkViewTab(0));
+        workDateTabButton.setOnClickListener(v -> showWorkViewTab(1));
+        workMonthTabButton.setOnClickListener(v -> showWorkViewTab(2));
+        showWorkViewTab(2);
         return scroll;
+    }
+
+    private void showWorkViewTab(int tab) {
+        if (weekSectionContainer == null || rangeSectionContainer == null || monthSectionContainer == null) return;
+        weekSectionContainer.setVisibility(tab == 0 ? View.VISIBLE : View.GONE);
+        rangeSectionContainer.setVisibility(tab == 1 ? View.VISIBLE : View.GONE);
+        monthSectionContainer.setVisibility(tab == 2 ? View.VISIBLE : View.GONE);
+        UiStyle.button(this, workWeekTabButton, tab == 0);
+        UiStyle.button(this, workDateTabButton, tab == 1);
+        UiStyle.button(this, workMonthTabButton, tab == 2);
+        workWeekTabButton.setEnabled(tab != 0);
+        workDateTabButton.setEnabled(tab != 1);
+        workMonthTabButton.setEnabled(tab != 2);
+        if (tab == 0) refreshWeek();
+        else if (tab == 1) calculateRange();
+        else refreshMonth();
     }
 
     private void showStatsTab(boolean wage) {
@@ -201,7 +217,9 @@ public class MainActivity extends Activity {
             if (ws == null || !target.isBefore(YearMonth.from(ws))) { displayedMonth = target; refreshMonth(); }
         });
         nav.addView(previousMonthButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-        monthTitle = text("", 20, true); monthTitle.setGravity(Gravity.CENTER);
+        monthTitle = text("", 18, true); monthTitle.setGravity(Gravity.CENTER);
+        monthTitle.setPadding(dp(8), dp(12), dp(8), dp(12));
+        monthTitle.setOnClickListener(v -> chooseWorkMonth());
         nav.addView(monthTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         nextMonthButton = button("›"); nextMonthButton.setTextSize(24);
         nextMonthButton.setOnClickListener(v -> { if (displayedMonth.isBefore(YearMonth.now())) { displayedMonth = displayedMonth.plusMonths(1); refreshMonth(); }});
@@ -228,7 +246,10 @@ public class MainActivity extends Activity {
         previousWeekButton = button("‹"); previousWeekButton.setTextSize(24);
         previousWeekButton.setOnClickListener(v -> { LocalDate target = displayedWeekStart.minusWeeks(1); LocalDate ws = getWorkStartDate(); if (ws == null || !target.isBefore(mondayOf(ws))) { displayedWeekStart = target; refreshWeek(); }});
         nav.addView(previousWeekButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
-        weekTitle = text("", 17, true); weekTitle.setGravity(Gravity.CENTER); nav.addView(weekTitle, new LinearLayout.LayoutParams(0, -2, 1f));
+        weekTitle = text("", 17, true); weekTitle.setGravity(Gravity.CENTER);
+        weekTitle.setPadding(dp(8), dp(12), dp(8), dp(12));
+        weekTitle.setOnClickListener(v -> chooseWorkWeek());
+        nav.addView(weekTitle, new LinearLayout.LayoutParams(0, -2, 1f));
         nextWeekButton = button("›"); nextWeekButton.setTextSize(24);
         nextWeekButton.setOnClickListener(v -> { LocalDate cur = mondayOf(LocalDate.now()); if (displayedWeekStart.isBefore(cur)) { displayedWeekStart = displayedWeekStart.plusWeeks(1); refreshWeek(); }});
         nav.addView(nextWeekButton, new LinearLayout.LayoutParams(dp(58), dp(48)));
@@ -241,8 +262,7 @@ public class MainActivity extends Activity {
         rangeStartButton = button(""); rangeStartButton.setOnClickListener(v -> showDatePicker(true)); row.addView(rangeStartButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
         TextView to = text(" 至 ", 14, false); to.setGravity(Gravity.CENTER); row.addView(to, new LinearLayout.LayoutParams(dp(38), dp(50)));
         rangeEndButton = button(""); rangeEndButton.setOnClickListener(v -> showDatePicker(false)); row.addView(rangeEndButton, new LinearLayout.LayoutParams(0, dp(50), 1f));
-        Button calc = button("统计这段时间"); UiStyle.button(this, calc, true); calc.setOnClickListener(v -> calculateRange()); LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, dp(50)); cp.topMargin = dp(8); root.addView(calc, cp);
-        LinearLayout c = card(); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(8); root.addView(c, p); rangeSummaryText = text("", 16, true); c.addView(rangeSummaryText); rangeDetailsContainer = vertical(); c.addView(rangeDetailsContainer);
+        LinearLayout c = card(); LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, -2); p.topMargin = dp(10); root.addView(c, p); rangeSummaryText = text("", 16, true); c.addView(rangeSummaryText); rangeDetailsContainer = vertical(); c.addView(rangeDetailsContainer);
     }
 
     private void refreshAll() { updateRangeButtons(); refreshMonth(); refreshWeek(); calculateRange(); }
@@ -250,7 +270,7 @@ public class MainActivity extends Activity {
     private void refreshMonth() {
         LocalDate today = LocalDate.now(); YearMonth now = YearMonth.from(today); LocalDate ws = getWorkStartDate(); YearMonth first = ws == null ? null : YearMonth.from(ws);
         if (displayedMonth.isAfter(now)) displayedMonth = now; if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
-        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月");
+        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n点击选择月份");
         previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first)); nextMonthButton.setEnabled(displayedMonth.isBefore(now));
         LocalDate start = displayedMonth.atDay(1); if (ws != null && start.isBefore(ws)) start = ws; LocalDate end = displayedMonth.equals(now) ? today : displayedMonth.atEndOfMonth();
         Stats s = collectStats(start, end); totalHoursText.setText(formatDurationHours(s.totalHours));
@@ -263,7 +283,7 @@ public class MainActivity extends Activity {
         LocalDate today = LocalDate.now(), cur = mondayOf(today), ws = getWorkStartDate(), first = ws == null ? null : mondayOf(ws);
         if (displayedWeekStart.isAfter(cur)) displayedWeekStart = cur; if (first != null && displayedWeekStart.isBefore(first)) displayedWeekStart = first;
         LocalDate weekEnd = displayedWeekStart.plusDays(6), start = displayedWeekStart; if (ws != null && start.isBefore(ws)) start = ws; LocalDate end = weekEnd.isAfter(today) ? today : weekEnd;
-        DateTimeFormatter f = DateTimeFormatter.ofPattern("M月d日"); weekTitle.setText(displayedWeekStart.format(f) + " - " + weekEnd.format(f));
+        DateTimeFormatter f = DateTimeFormatter.ofPattern("M月d日"); weekTitle.setText(displayedWeekStart.format(f) + " - " + weekEnd.format(f) + "\n点击选择星期");
         previousWeekButton.setEnabled(first == null || displayedWeekStart.isAfter(first)); nextWeekButton.setEnabled(displayedWeekStart.isBefore(cur)); weekDetailsContainer.removeAllViews();
         if (start.isAfter(end)) { weekSummaryText.setText("本周尚未开始工作"); return; }
         Stats s = collectStats(start, end);
@@ -343,8 +363,10 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    private void showDatePicker(boolean startPicker){LocalDate initial=startPicker?rangeStart:rangeEnd,today=LocalDate.now(),ws=getWorkStartDate();if(ws!=null&&initial.isBefore(ws))initial=ws;DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate s=LocalDate.of(y,m+1,day);if(s.isAfter(today))s=today;if(ws!=null&&s.isBefore(ws))s=ws;if(startPicker)rangeStart=s;else rangeEnd=s;updateRangeButtons();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
-    private void updateRangeButtons(){DateTimeFormatter f=DateTimeFormatter.ofPattern("yyyy-MM-dd");rangeStartButton.setText(rangeStart.format(f));rangeEndButton.setText(rangeEnd.format(f));}
+    private void chooseWorkWeek(){LocalDate initial=displayedWeekStart,today=LocalDate.now(),ws=getWorkStartDate();DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate picked=LocalDate.of(y,m+1,day);displayedWeekStart=mondayOf(picked);refreshWeek();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
+    private void chooseWorkMonth(){LocalDate ws=getWorkStartDate();int minYear=ws==null?Math.max(2000,displayedMonth.getYear()-20):ws.getYear(),maxYear=YearMonth.now().getYear();LinearLayout box=horizontal();box.setPadding(dp(24),dp(12),dp(24),dp(4));box.setGravity(Gravity.CENTER);NumberPicker yp=new NumberPicker(this);yp.setMinValue(minYear);yp.setMaxValue(maxYear);yp.setValue(Math.max(minYear,Math.min(maxYear,displayedMonth.getYear())));box.addView(yp,new LinearLayout.LayoutParams(0,-2,1f));NumberPicker mp=new NumberPicker(this);mp.setMinValue(1);mp.setMaxValue(12);mp.setDisplayedValues(new String[]{"1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"});mp.setValue(displayedMonth.getMonthValue());box.addView(mp,new LinearLayout.LayoutParams(0,-2,1f));AlertDialog dialog=new AlertDialog.Builder(this).setTitle("选择月份").setView(box).setNegativeButton("取消",null).setPositiveButton("确定",null).create();dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{YearMonth picked=YearMonth.of(yp.getValue(),mp.getValue()),now=YearMonth.now(),first=ws==null?null:YearMonth.from(ws);if(picked.isAfter(now)){Toast.makeText(this,"不能选择未来月份",Toast.LENGTH_SHORT).show();return;}if(first!=null&&picked.isBefore(first)){Toast.makeText(this,"不能早于工作开始月份",Toast.LENGTH_SHORT).show();return;}displayedMonth=picked;refreshMonth();dialog.dismiss();}));dialog.show();}
+    private void showDatePicker(boolean startPicker){LocalDate initial=startPicker?rangeStart:rangeEnd,today=LocalDate.now(),ws=getWorkStartDate();if(ws!=null&&initial.isBefore(ws))initial=ws;DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate s=LocalDate.of(y,m+1,day);if(s.isAfter(today))s=today;if(ws!=null&&s.isBefore(ws))s=ws;if(startPicker){rangeStart=s;if(rangeEnd.isBefore(rangeStart))rangeEnd=rangeStart;}else{rangeEnd=s;if(rangeStart.isAfter(rangeEnd))rangeStart=rangeEnd;}updateRangeButtons();calculateRange();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
+    private void updateRangeButtons(){DateTimeFormatter f=DateTimeFormatter.ofPattern("yyyy-MM-dd");rangeStartButton.setText("开始\n"+rangeStart.format(f));rangeEndButton.setText("结束\n"+rangeEnd.format(f));}
     private void calculateRange(){if(rangeDetailsContainer==null)return;rangeDetailsContainer.removeAllViews();LocalDate today=LocalDate.now(),ws=getWorkStartDate(),start=rangeStart,end=rangeEnd.isAfter(today)?today:rangeEnd;if(ws!=null&&start.isBefore(ws))start=ws;if(start.isAfter(end)){rangeSummaryText.setText("开始日期不能晚于结束日期");return;}Stats s=collectStats(start,end);rangeSummaryText.setText(start+" 至 "+end+"\n总工时："+formatDurationHours(s.totalHours)+"（加班 "+formatDurationHours(s.overtimeHours)+"）\n"+StatusStatsFormatter.format(s.workDays,s.leaveDays,s.holidayDays,s.restDays));addPeriodDetails(rangeDetailsContainer,start,end,false,true);}
     private Stats collectStats(LocalDate start,LocalDate end){Stats s=new Stats();if(start==null||end==null||start.isAfter(end))return s;float daily=getConfiguredDailyHours();LocalDate ws=getWorkStartDate();for(LocalDate d=start;!d.isAfter(end);d=d.plusDays(1)){if(ws!=null&&d.isBefore(ws))continue;boolean h=isBankHoliday(d),l=!h&&isLeave(d),r=!h&&!l&&isManualRest(d),c=isConfiguredWorkDay(d)&&!h,o=!h&&!l&&!r&&hasOverride(d),a=!h&&!l&&!r&&!o&&!c;float base=getBaseHoursForDate(d,daily,c),ot=getOvertimeHours(d);s.totalHours+=base+ot;s.overtimeHours+=ot;if(base+ot>0)s.workDays++;if(l)s.leaveDays++;if(h)s.holidayDays++;if(r||a)s.restDays++;if(o)s.overrideDays++;}return s;}
     private static class Stats{float totalHours,overtimeHours;int workDays,leaveDays,holidayDays,restDays,overrideDays;}
