@@ -57,6 +57,7 @@ public class SettingsActivity extends Activity {
     private EditText monthlyRestInput;
     private TextView previewText;
     private Button workStartDateButton;
+    private CheckBox workAlarmCheck;
     private LocalDate workStartDate;
     private final CheckBox[] restDayChecks = new CheckBox[7];
 
@@ -131,6 +132,17 @@ public class SettingsActivity extends Activity {
         root.addView(breakLabel);
         breakInput = input("30", InputType.TYPE_CLASS_NUMBER);
         root.addView(breakInput);
+
+        TextView alarmTitle = text("上班闹钟", 17, true);
+        alarmTitle.setPadding(0, dp(22), 0, dp(4));
+        root.addView(alarmTitle);
+        TextView alarmInfo = text("开启后会根据上班时间和每周工作日自动同步系统闹钟。修改工作时间或每周休息日后，保存设置会重新同步。", 13, false);
+        alarmInfo.setPadding(0, 0, 0, dp(4));
+        root.addView(alarmInfo);
+        workAlarmCheck = new CheckBox(this);
+        workAlarmCheck.setText("自动设置上班闹钟");
+        workAlarmCheck.setTextSize(16);
+        root.addView(workAlarmCheck);
 
         previewText = text("", 15, true);
         previewText.setPadding(0, dp(12), 0, dp(8));
@@ -422,6 +434,7 @@ public class SettingsActivity extends Activity {
         endInput.setText(prefs.getString(END_TIME_KEY, "17:30"));
         breakInput.setText(String.valueOf(prefs.getInt(BREAK_MINUTES_KEY, 30)));
         monthlyRestInput.setText(prefs.getString(MONTHLY_REST_DAYS_KEY, ""));
+        workAlarmCheck.setChecked(prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false));
 
         workStartDate = null;
         String savedStartDate = prefs.getString(WORK_START_DATE_KEY, "");
@@ -469,7 +482,8 @@ public class SettingsActivity extends Activity {
                 .putString(END_TIME_KEY, end)
                 .putInt(BREAK_MINUTES_KEY, breakMinutes)
                 .putFloat("daily_hours", dailyHours)
-                .putString(MONTHLY_REST_DAYS_KEY, monthlyRestDays);
+                .putString(MONTHLY_REST_DAYS_KEY, monthlyRestDays)
+                .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked());
 
         if (workStartDate == null) editor.remove(WORK_START_DATE_KEY);
         else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());
@@ -478,6 +492,14 @@ public class SettingsActivity extends Activity {
             editor.putBoolean("day_" + i, !restDayChecks[i].isChecked());
         }
         editor.apply();
+
+        if (workAlarmCheck.isChecked()) {
+            if (WorkAlarmManager.sync(this)) {
+                Toast.makeText(this, "上班闹钟已同步", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "无法同步系统闹钟，请确认手机有可用的时钟应用", Toast.LENGTH_LONG).show();
+            }
+        }
 
         startInput.setText(start);
         endInput.setText(end);
