@@ -23,6 +23,13 @@
         </receiver>
 
         <activity
+            android:name=".WorkAlarmRetryActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <activity
             android:name=".WageActivity"
             android:exported="false"
             android:label="工资统计" />

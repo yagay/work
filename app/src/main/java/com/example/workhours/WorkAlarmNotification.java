@@ -28,6 +28,46 @@ public final class WorkAlarmNotification {
         }
     }
 
+    public static void notifyRetryRequired(Context context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        NotificationManager manager =
+                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID,
+                    "上班闹钟同步",
+                    NotificationManager.IMPORTANCE_DEFAULT);
+            channel.setDescription("后台自动同步失败时提醒点击完成同步");
+            manager.createNotificationChannel(channel);
+        }
+
+        Intent retry = new Intent(context, WorkAlarmRetryActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent retryIntent = PendingIntent.getActivity(
+                context, 7203, retry,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(context, CHANNEL_ID)
+                : new Notification.Builder(context);
+        builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle("下周闹钟需要确认同步")
+                .setContentText("后台自动同步被系统阻止，点一下完成同步。")
+                .setContentIntent(retryIntent)
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_REMINDER)
+                .setVisibility(Notification.VISIBILITY_PUBLIC);
+
+        manager.notify(NOTIFICATION_ID, builder.build());
+    }
+
     public static void notifySyncResult(Context context, boolean success, boolean automatic) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
