@@ -154,6 +154,9 @@ public class SettingsActivity extends Activity {
         workAlarmCheck = new CheckBox(this);
         workAlarmCheck.setText("自动设置上班闹钟");
         workAlarmCheck.setTextSize(16);
+        workAlarmCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked) WorkAlarmNotification.requestPermissionIfNeeded(this);
+        });
         root.addView(workAlarmCheck);
 
         alarmFollowWorkTimeCheck = new CheckBox(this);
@@ -554,8 +557,11 @@ public class SettingsActivity extends Activity {
         editor.apply();
 
         if (workAlarmCheck.isChecked()) {
+            WorkAlarmNotification.requestPermissionIfNeeded(this);
             WorkAlarmUpdateScheduler.schedule(this);
-            if (WorkAlarmManager.forceSync(this)) {
+            boolean syncSuccess = WorkAlarmManager.forceSync(this);
+            WorkAlarmNotification.notifySyncResult(this, syncSuccess, false);
+            if (syncSuccess) {
                 Toast.makeText(this,
                         "设置已保存 ｜ 系统闹钟写入请求已成功发送",
                         Toast.LENGTH_LONG).show();
