@@ -16,7 +16,8 @@ public class WorkAlarmRescheduleReceiver extends BroadcastReceiver {
 
         String action = intent == null ? null : intent.getAction();
         if (WorkAlarmUpdateScheduler.ACTION_WEEKLY_UPDATE.equals(action)) {
-            WorkAlarmManager.forceSyncNextWeek(context);
+            boolean success = WorkAlarmManager.forceSyncNextWeek(context);
+            WorkAlarmNotification.notifySyncResult(context, success, true);
         } else {
             prefs.edit().remove("work_alarm_last_sync_signature").apply();
         }
