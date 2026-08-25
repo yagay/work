@@ -72,9 +72,7 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (prefs != null
-                && prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)
-                && WorkAlarmManager.canScheduleExact(this)) {
+        if (prefs != null && prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)) {
             WorkAlarmManager.sync(this);
         }
     }
@@ -146,7 +144,7 @@ public class SettingsActivity extends Activity {
         TextView alarmTitle = text("上班闹钟", 17, true);
         alarmTitle.setPadding(0, dp(22), 0, dp(4));
         root.addView(alarmTitle);
-        TextView alarmInfo = text("开启后按上班时间自动安排下一次有效工作日闹钟，并自动跳过公共假日、请假、手动休息和每月固定休息日。修改这些规则后会重新计算。", 13, false);
+        TextView alarmInfo = text("开启后按本周实际工作日期同步到手机系统时钟。公共假日、请假、手动休息和每月固定休息日会从本周闹钟星期中排除；App 本身不响铃。", 13, false);
         alarmInfo.setPadding(0, 0, 0, dp(4));
         root.addView(alarmInfo);
         workAlarmCheck = new CheckBox(this);
@@ -504,13 +502,10 @@ public class SettingsActivity extends Activity {
         editor.apply();
 
         if (workAlarmCheck.isChecked()) {
-            if (!WorkAlarmManager.canScheduleExact(this)) {
-                Toast.makeText(this, "请允许精确闹钟权限，返回 App 后会自动完成设置", Toast.LENGTH_LONG).show();
-                WorkAlarmManager.requestExactAlarmPermission(this);
-            } else if (WorkAlarmManager.sync(this)) {
-                Toast.makeText(this, "下一次上班闹钟已安排", Toast.LENGTH_SHORT).show();
+            if (WorkAlarmManager.forceSync(this)) {
+                Toast.makeText(this, "本周上班闹钟已同步到系统时钟", Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "无法安排上班闹钟，请检查上班时间和工作日设置", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "无法写入系统时钟，请确认手机有可用的时钟应用", Toast.LENGTH_LONG).show();
             }
         } else {
             WorkAlarmManager.cancel(this);

@@ -1,21 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".WorkHoursApplication"
         android:allowBackup="true"
         android:label="上班总时间"
         android:theme="@style/AppTheme">
-
-        <activity
-            android:name=".WorkAlarmActivity"
-            android:excludeFromRecents="true"
-            android:exported="false"
-            android:showOnLockScreen="true"
-            android:turnScreenOn="true" />
 
         <receiver
             android:name=".WorkAlarmRescheduleReceiver"
