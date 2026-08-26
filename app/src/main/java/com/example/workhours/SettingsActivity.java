@@ -100,9 +100,7 @@ public class SettingsActivity extends Activity {
     private LocalDate workStartDate;
     private TextView currentWageText;
     private LinearLayout wageHistoryContainer;
-    private Button themeSystemButton;
-    private Button themeLightButton;
-    private Button themeDarkButton;
+    private Button themeModeButton;
     private boolean appliedDarkTheme;
     private final Button[] restDayButtons = new Button[7];
 
@@ -156,19 +154,12 @@ public class SettingsActivity extends Activity {
         TextView appearanceInfo = text("选择 App 的显示主题。跟随系统会自动使用手机当前的浅色或深色模式。", 13, false);
         appearanceInfo.setPadding(0, 0, 0, dp(8));
         appearanceSection.addView(appearanceInfo);
-        LinearLayout themeRow = new LinearLayout(this);
-        themeRow.setOrientation(LinearLayout.HORIZONTAL);
+        themeModeButton = optionButton();
+        themeModeButton.setOnClickListener(v -> chooseThemeMode());
+        LinearLayout themeRow = settingInputRow("主题模式", dp(180));
+        themeRow.addView(themeModeButton, compactInputParams(dp(180)));
         appearanceSection.addView(themeRow);
-        themeSystemButton = new Button(this); themeSystemButton.setText("跟随系统");
-        themeLightButton = new Button(this); themeLightButton.setText("浅色");
-        themeDarkButton = new Button(this); themeDarkButton.setText("深色");
-        themeSystemButton.setOnClickListener(v -> setAppTheme(AppThemeManager.SYSTEM));
-        themeLightButton.setOnClickListener(v -> setAppTheme(AppThemeManager.LIGHT));
-        themeDarkButton.setOnClickListener(v -> setAppTheme(AppThemeManager.DARK));
-        themeRow.addView(themeSystemButton, new LinearLayout.LayoutParams(0, dp(46), 1f));
-        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(0, dp(46), 1f); tlp.leftMargin=dp(6); themeRow.addView(themeLightButton, tlp);
-        LinearLayout.LayoutParams tdp = new LinearLayout.LayoutParams(0, dp(46), 1f); tdp.leftMargin=dp(6); themeRow.addView(themeDarkButton, tdp);
-        refreshThemeButtons();
+        refreshThemeButton();
 
         LinearLayout basicSection = createCollapsibleSection(root, "基本工作设置", true);
         basicSection.addView(text("工作开始日期（可选）", 17, true));
@@ -353,19 +344,12 @@ public class SettingsActivity extends Activity {
         restRuleInfo.setPadding(0, 0, 0, dp(8));
         restSection.addView(restRuleInfo);
 
-        LinearLayout restModeRow = new LinearLayout(this);
-        restModeRow.setOrientation(LinearLayout.HORIZONTAL);
+        weeklyRestModeButton = optionButton();
+        weeklyRestModeButton.setOnClickListener(v -> chooseRestRuleMode());
+        LinearLayout restModeRow = settingInputRow("规则类型", dp(190));
+        restModeRow.addView(weeklyRestModeButton, compactInputParams(dp(190)));
         restSection.addView(restModeRow);
-        weeklyRestModeButton = new Button(this);
-        weeklyRestModeButton.setText("每周休息日");
-        weeklyRestModeButton.setOnClickListener(v -> setRestRuleMode("weekly"));
-        restModeRow.addView(weeklyRestModeButton, new LinearLayout.LayoutParams(0, dp(48), 1f));
-        monthlyRestModeButton = new Button(this);
-        monthlyRestModeButton.setText("每月固定休息日");
-        monthlyRestModeButton.setOnClickListener(v -> setRestRuleMode("monthly"));
-        LinearLayout.LayoutParams mrmp = new LinearLayout.LayoutParams(0, dp(48), 1f);
-        mrmp.leftMargin = dp(8);
-        restModeRow.addView(monthlyRestModeButton, mrmp);
+        monthlyRestModeButton = null;
 
         weeklyRestGroup = new LinearLayout(this);
         weeklyRestGroup.setOrientation(LinearLayout.VERTICAL);
@@ -822,8 +806,10 @@ public class SettingsActivity extends Activity {
         boolean monthly = "monthly".equals(restRuleMode);
         if (weeklyRestGroup != null) weeklyRestGroup.setVisibility(monthly ? android.view.View.GONE : android.view.View.VISIBLE);
         if (monthlyRestGroup != null) monthlyRestGroup.setVisibility(monthly ? android.view.View.VISIBLE : android.view.View.GONE);
-        if (weeklyRestModeButton != null) { weeklyRestModeButton.setSelected(!monthly); updateRestModeButtonStyle(weeklyRestModeButton, !monthly); }
-        if (monthlyRestModeButton != null) { monthlyRestModeButton.setSelected(monthly); updateRestModeButtonStyle(monthlyRestModeButton, monthly); }
+        if (weeklyRestModeButton != null) {
+            weeklyRestModeButton.setTag(restRuleMode);
+            weeklyRestModeButton.setText((monthly ? "每月固定休息日" : "每周休息日") + "  ›");
+        }
         if (monthly && monthlyRestCalendarGrid != null) rebuildMonthlyRestCalendar();
     }
 
@@ -941,7 +927,12 @@ public class SettingsActivity extends Activity {
     }
 
     private Button optionButton() {
-        Button b=new Button(this); UiStyle.button(this,b,false); return b;
+        Button b=new Button(this);
+        UiStyle.button(this,b,false);
+        b.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        b.setTextSize(14);
+        b.setPadding(dp(10),0,dp(12),0);
+        return b;
     }
 
     private void chooseAlarmRingtone() {
@@ -959,27 +950,35 @@ public class SettingsActivity extends Activity {
         if(alarmRingtoneButton==null)return;
         String saved=prefs.getString(WorkAlarmOptions.RINGTONE_URI_KEY,"");
         Uri uri=saved==null||saved.isEmpty()?RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM):Uri.parse(saved);
-        try { android.media.Ringtone r=RingtoneManager.getRingtone(this,uri); String title=r==null?"系统默认":r.getTitle(this); alarmRingtoneButton.setText(title); }
-        catch(Exception e){alarmRingtoneButton.setText("系统默认");}
+        try { android.media.Ringtone r=RingtoneManager.getRingtone(this,uri); String title=r==null?"系统默认":r.getTitle(this); alarmRingtoneButton.setText(title + "  ›"); }
+        catch(Exception e){alarmRingtoneButton.setText("系统默认  ›");}
     }
 
     private void chooseOption(String title, Button button, String[] labels, String[] values) {
-        new AlertDialog.Builder(this).setTitle(title).setItems(labels,(d,w)->{
-            button.setTag(values[w]); button.setText(labels[w]);
+        String current = button.getTag() == null ? "" : String.valueOf(button.getTag());
+        int checked = 0; for (int i=0;i<values.length;i++) if (values[i].equals(current)) { checked=i; break; }
+        new AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(labels,checked,(d,w)->{
+            d.dismiss();
+            button.setTag(values[w]); button.setText(labels[w] + "  ›");
             String key = button==vibrationPatternButton ? WorkAlarmOptions.VIBRATE_PATTERN_KEY : button==alarmKeyActionButton ? WorkAlarmOptions.KEY_ACTION_KEY : WorkAlarmOptions.BACK_ACTION_KEY;
             prefs.edit().putString(key,values[w]).apply();
-        }).show();
+        }).setNegativeButton("取消",null).show();
     }
 
     private void chooseIntOption(String title, Button button, String[] labels, int[] values, String key) {
-        new AlertDialog.Builder(this).setTitle(title).setItems(labels,(d,w)->{button.setTag(values[w]);button.setText(labels[w]);prefs.edit().putInt(key,values[w]).apply();}).show();
+        int current = button.getTag() instanceof Integer ? (Integer)button.getTag() : values[0];
+        int checked = 0; for (int i=0;i<values.length;i++) if (values[i]==current) { checked=i; break; }
+        new AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(labels,checked,(d,w)->{
+            d.dismiss();
+            button.setTag(values[w]);button.setText(labels[w] + "  ›");prefs.edit().putInt(key,values[w]).apply();
+        }).setNegativeButton("取消",null).show();
     }
 
     private void setOptionButton(Button button,String value,String[] labels,String[] values){
-        int found=0;for(int i=0;i<values.length;i++)if(values[i].equals(value)){found=i;break;}button.setTag(values[found]);button.setText(labels[found]);
+        int found=0;for(int i=0;i<values.length;i++)if(values[i].equals(value)){found=i;break;}button.setTag(values[found]);button.setText(labels[found] + "  ›");
     }
     private void setIntOptionButton(Button button,int value,String[] labels,int[] values){
-        int found=0;for(int i=0;i<values.length;i++)if(values[i]==value){found=i;break;}button.setTag(values[found]);button.setText(labels[found]);
+        int found=0;for(int i=0;i<values.length;i++)if(values[i]==value){found=i;break;}button.setTag(values[found]);button.setText(labels[found] + "  ›");
     }
 
     private void testAlarmNow() {
@@ -997,16 +996,37 @@ public class SettingsActivity extends Activity {
         recreate();
     }
 
-    private void refreshThemeButtons() {
-        if (themeSystemButton == null) return;
-        String mode = AppThemeManager.mode(this);
-        paintThemeButton(themeSystemButton, AppThemeManager.SYSTEM.equals(mode));
-        paintThemeButton(themeLightButton, AppThemeManager.LIGHT.equals(mode));
-        paintThemeButton(themeDarkButton, AppThemeManager.DARK.equals(mode));
+    private void refreshThemeButton() {
+        if (themeModeButton == null) return;
+        themeModeButton.setText(AppThemeManager.label(AppThemeManager.mode(this)) + "  ›");
     }
 
-    private void paintThemeButton(Button button, boolean selected) {
-        UiStyle.button(this, button, selected);
+    private void chooseThemeMode() {
+        String[] labels = {"跟随系统", "浅色", "深色"};
+        String[] values = {AppThemeManager.SYSTEM, AppThemeManager.LIGHT, AppThemeManager.DARK};
+        String current = AppThemeManager.mode(this);
+        int checked = AppThemeManager.LIGHT.equals(current) ? 1 : AppThemeManager.DARK.equals(current) ? 2 : 0;
+        new AlertDialog.Builder(this)
+                .setTitle("主题模式")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    setAppTheme(values[which]);
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private void chooseRestRuleMode() {
+        String[] labels = {"每周休息日", "每月固定休息日"};
+        int checked = "monthly".equals(restRuleMode) ? 1 : 0;
+        new AlertDialog.Builder(this)
+                .setTitle("休息规则")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    dialog.dismiss();
+                    setRestRuleMode(which == 1 ? "monthly" : "weekly");
+                })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     private LinearLayout createCollapsibleSection(LinearLayout root, String title, boolean expanded) {
