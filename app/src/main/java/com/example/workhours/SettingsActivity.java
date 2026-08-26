@@ -198,14 +198,14 @@ public class SettingsActivity extends Activity {
         basicSection.addView(breakRow);
 
         LinearLayout alarmSection = createCollapsibleSection(root, "上班闹钟", false);
-        TextView alarmInfo = text("开启后按本周实际工作日期同步到手机系统时钟。公共假日、请假、手动休息和每月固定休息日会从本周闹钟星期中排除；App 本身不响铃。", 13, false);
+        TextView alarmInfo = text("开启后由系统 AlarmManager 保存未来工作日闹钟，App 被清后台也不会影响已设置的闹钟。使用系统默认闹钟铃声和震动；公共假日、请假和休息日自动排除。", 13, false);
         alarmInfo.setPadding(0, 0, 0, dp(4));
         alarmSection.addView(alarmInfo);
         workAlarmCheck = new CheckBox(this);
         workAlarmCheck.setText("自动设置上班闹钟");
         workAlarmCheck.setTextSize(16);
         workAlarmCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) WorkAlarmNotification.requestPermissionIfNeeded(this);
+            if (isChecked) { WorkAlarmNotification.requestPermissionIfNeeded(this); WorkAlarmManager.requestAlarmPermissions(this); }
             if (alarmOptionsGroup != null) alarmOptionsGroup.setVisibility(
                     isChecked ? android.view.View.VISIBLE : android.view.View.GONE);
         });
@@ -233,7 +233,7 @@ public class SettingsActivity extends Activity {
         alarmUpdateTimeInput = input("12:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
         updateTimeRow.addView(alarmUpdateTimeInput, compactInputParams(dp(126)));
         alarmOptionsGroup.addView(updateTimeRow);
-        TextView updateTimeInfo = text("每周日到这个时间重新计算下一周工作日并同步系统时钟。", 13, false);
+        TextView updateTimeInfo = text("每周日到这个时间重新计算未来工作日并刷新系统闹钟；不会重复创建同一天的闹钟。", 13, false);
         updateTimeInfo.setPadding(0, dp(4), 0, 0);
         alarmOptionsGroup.addView(updateTimeInfo);
 
