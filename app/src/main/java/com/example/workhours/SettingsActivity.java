@@ -52,8 +52,8 @@ public class SettingsActivity extends Activity {
     private static final int UI_LABEL_SP = 15;
     private static final int UI_VALUE_SP = 14;
     private static final int UI_BODY_SP = 13;
-    private static final int UI_ROW_DP = 48;
-    private static final int UI_ACTION_DP = 50;
+    private static final int UI_ROW_DP = 42;
+    private static final int UI_ACTION_DP = 46;
 
     private static final String PREFS = "work_hours_prefs";
     private static final String START_TIME_KEY = "start_time";
@@ -940,8 +940,9 @@ public class SettingsActivity extends Activity {
         UiStyle.button(this,b,false);
         b.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         b.setTextSize(UI_VALUE_SP);
-        b.setMinHeight(dp(UI_ROW_DP));
-        b.setPadding(dp(10),0,dp(12),0);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(8),0,dp(10),0);
         return b;
     }
 
@@ -964,24 +965,57 @@ public class SettingsActivity extends Activity {
         catch(Exception e){alarmRingtoneButton.setText("系统默认  ›");}
     }
 
+    private void showCompactSingleChoice(String title, String[] labels, int checked, android.content.DialogInterface.OnClickListener listener) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(8), dp(2), dp(8), dp(4));
+        final AlertDialog[] holder = new AlertDialog[1];
+        for (int i = 0; i < labels.length; i++) {
+            final int index = i;
+            RadioButton item = new RadioButton(this);
+            item.setText(labels[i]);
+            item.setTextSize(UI_LABEL_SP);
+            item.setTextColor(UiStyle.TEXT);
+            item.setChecked(i == checked);
+            item.setGravity(Gravity.CENTER_VERTICAL);
+            item.setPadding(dp(8), 0, dp(8), 0);
+            item.setMinHeight(0);
+            item.setMinimumHeight(0);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(40));
+            box.addView(item, lp);
+            item.setOnClickListener(v -> {
+                if (holder[0] != null) {
+                    listener.onClick(holder[0], index);
+                }
+            });
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setView(box)
+                .setNegativeButton("取消", null)
+                .create();
+        holder[0] = dialog;
+        dialog.show();
+    }
+
     private void chooseOption(String title, Button button, String[] labels, String[] values) {
         String current = button.getTag() == null ? "" : String.valueOf(button.getTag());
         int checked = 0; for (int i=0;i<values.length;i++) if (values[i].equals(current)) { checked=i; break; }
-        new AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(labels,checked,(d,w)->{
+        showCompactSingleChoice(title, labels, checked, (d,w)->{
             d.dismiss();
             button.setTag(values[w]); button.setText(labels[w] + "  ›");
             String key = button==vibrationPatternButton ? WorkAlarmOptions.VIBRATE_PATTERN_KEY : button==alarmKeyActionButton ? WorkAlarmOptions.KEY_ACTION_KEY : WorkAlarmOptions.BACK_ACTION_KEY;
             prefs.edit().putString(key,values[w]).apply();
-        }).setNegativeButton("取消",null).show();
+        });
     }
 
     private void chooseIntOption(String title, Button button, String[] labels, int[] values, String key) {
         int current = button.getTag() instanceof Integer ? (Integer)button.getTag() : values[0];
         int checked = 0; for (int i=0;i<values.length;i++) if (values[i]==current) { checked=i; break; }
-        new AlertDialog.Builder(this).setTitle(title).setSingleChoiceItems(labels,checked,(d,w)->{
+        showCompactSingleChoice(title, labels, checked, (d,w)->{
             d.dismiss();
             button.setTag(values[w]);button.setText(labels[w] + "  ›");prefs.edit().putInt(key,values[w]).apply();
-        }).setNegativeButton("取消",null).show();
+        });
     }
 
     private void setOptionButton(Button button,String value,String[] labels,String[] values){
@@ -1016,34 +1050,26 @@ public class SettingsActivity extends Activity {
         String[] values = {AppThemeManager.SYSTEM, AppThemeManager.LIGHT, AppThemeManager.DARK};
         String current = AppThemeManager.mode(this);
         int checked = AppThemeManager.LIGHT.equals(current) ? 1 : AppThemeManager.DARK.equals(current) ? 2 : 0;
-        new AlertDialog.Builder(this)
-                .setTitle("主题模式")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    dialog.dismiss();
-                    setAppTheme(values[which]);
-                })
-                .setNegativeButton("取消", null)
-                .show();
+        showCompactSingleChoice("主题模式", labels, checked, (dialog, which) -> {
+            dialog.dismiss();
+            setAppTheme(values[which]);
+        });
     }
 
     private void chooseRestRuleMode() {
         String[] labels = {"每周休息日", "每月固定休息日"};
         int checked = "monthly".equals(restRuleMode) ? 1 : 0;
-        new AlertDialog.Builder(this)
-                .setTitle("休息规则")
-                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
-                    dialog.dismiss();
-                    setRestRuleMode(which == 1 ? "monthly" : "weekly");
-                })
-                .setNegativeButton("取消", null)
-                .show();
+        showCompactSingleChoice("休息规则", labels, checked, (dialog, which) -> {
+            dialog.dismiss();
+            setRestRuleMode(which == 1 ? "monthly" : "weekly");
+        });
     }
 
     private LinearLayout createCollapsibleSection(LinearLayout root, String title, boolean expanded) {
         LinearLayout wrapper = new LinearLayout(this);
         wrapper.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams wrapperParams = new LinearLayout.LayoutParams(-1, -2);
-        wrapperParams.topMargin = dp(8);
+        wrapperParams.topMargin = dp(6);
         root.addView(wrapper, wrapperParams);
 
         Button header = new Button(this);
@@ -1056,7 +1082,7 @@ public class SettingsActivity extends Activity {
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(4), dp(8), dp(4), dp(8));
+        content.setPadding(dp(4), dp(5), dp(4), dp(5));
         wrapper.addView(content, new LinearLayout.LayoutParams(-1, -2));
 
         final boolean[] open = {expanded};
@@ -1074,7 +1100,7 @@ public class SettingsActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setMinimumHeight(dp(UI_ROW_DP));
-        row.setPadding(0, dp(4), 0, dp(4));
+        row.setPadding(0, dp(1), 0, dp(1));
         TextView title = text(label, UI_LABEL_SP, true);
         row.addView(title, new LinearLayout.LayoutParams(0,
                 LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
@@ -1094,6 +1120,7 @@ public class SettingsActivity extends Activity {
         view.setTextSize(UI_LABEL_SP);
         view.setHint(hint);
         UiStyle.input(this, view);
+        view.setPadding(dp(12), dp(4), dp(12), dp(4));
         return view;
     }
 
