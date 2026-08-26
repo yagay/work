@@ -3,6 +3,7 @@ package com.example.workhours;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DatePickerDialog;
+import android.media.RingtoneManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
@@ -58,6 +59,7 @@ public class SettingsActivity extends Activity {
     private static final String WAGE_HISTORY_KEY = "wage_history";
     private static final int REQUEST_EXPORT = 2001;
     private static final int REQUEST_IMPORT = 2002;
+    private static final int REQUEST_RINGTONE = 2003;
     private static final int BACKUP_FORMAT_VERSION = 1;
 
     private SharedPreferences prefs;
@@ -85,6 +87,16 @@ public class SettingsActivity extends Activity {
     private EditText alarmTimeInput;
     private LinearLayout alarmTimeGroup;
     private EditText alarmUpdateTimeInput;
+    private Button alarmRingtoneButton;
+    private CheckBox alarmVibrateCheck;
+    private Button vibrationPatternButton;
+    private Button fadeButton;
+    private Button autoStopButton;
+    private CheckBox snoozeEnabledCheck;
+    private Button snoozeMinutesButton;
+    private Button snoozeMaxButton;
+    private Button alarmKeyActionButton;
+    private Button alarmBackActionButton;
     private LocalDate workStartDate;
     private TextView currentWageText;
     private LinearLayout wageHistoryContainer;
@@ -236,6 +248,66 @@ public class SettingsActivity extends Activity {
         TextView updateTimeInfo = text("每周日到这个时间重新计算未来工作日并刷新系统闹钟；不会重复创建同一天的闹钟。", 13, false);
         updateTimeInfo.setPadding(0, dp(4), 0, 0);
         alarmOptionsGroup.addView(updateTimeInfo);
+
+        LinearLayout alarmBehaviorSection = createCollapsibleSection(root, "闹钟响铃设置", false);
+        TextView behaviorInfo = text("单独设置铃声、震动、渐强、稍后提醒和按键行为。电源键/Home 键由 Android 系统保留，App 无法可靠拦截。", 13, false);
+        behaviorInfo.setPadding(0, 0, 0, dp(8));
+        alarmBehaviorSection.addView(behaviorInfo);
+
+        alarmRingtoneButton = new Button(this);
+        UiStyle.button(this, alarmRingtoneButton, false);
+        alarmRingtoneButton.setOnClickListener(v -> chooseAlarmRingtone());
+        LinearLayout ringtoneRow = settingInputRow("闹钟铃声", dp(180));
+        ringtoneRow.addView(alarmRingtoneButton, compactInputParams(dp(180)));
+        alarmBehaviorSection.addView(ringtoneRow);
+
+        alarmVibrateCheck = new CheckBox(this);
+        alarmVibrateCheck.setText("响铃时震动"); alarmVibrateCheck.setTextSize(16);
+        alarmBehaviorSection.addView(alarmVibrateCheck);
+
+        vibrationPatternButton = optionButton();
+        vibrationPatternButton.setOnClickListener(v -> chooseOption("震动方式", vibrationPatternButton,
+                new String[]{"普通","强烈","间歇"}, new String[]{"normal","strong","pulse"}));
+        LinearLayout vibrationRow = settingInputRow("震动方式", dp(150));
+        vibrationRow.addView(vibrationPatternButton, compactInputParams(dp(150))); alarmBehaviorSection.addView(vibrationRow);
+
+        fadeButton = optionButton();
+        fadeButton.setOnClickListener(v -> chooseIntOption("音量渐强", fadeButton,
+                new String[]{"关闭","15 秒","30 秒","60 秒"}, new int[]{0,15,30,60}, WorkAlarmOptions.FADE_SECONDS_KEY));
+        LinearLayout fadeRow = settingInputRow("音量渐强", dp(150)); fadeRow.addView(fadeButton, compactInputParams(dp(150))); alarmBehaviorSection.addView(fadeRow);
+
+        autoStopButton = optionButton();
+        autoStopButton.setOnClickListener(v -> chooseIntOption("自动停止", autoStopButton,
+                new String[]{"不自动停止","5 分钟","10 分钟","15 分钟","30 分钟"}, new int[]{0,5,10,15,30}, WorkAlarmOptions.AUTO_STOP_MINUTES_KEY));
+        LinearLayout autoStopRow = settingInputRow("自动停止", dp(150)); autoStopRow.addView(autoStopButton, compactInputParams(dp(150))); alarmBehaviorSection.addView(autoStopRow);
+
+        snoozeEnabledCheck = new CheckBox(this); snoozeEnabledCheck.setText("允许稍后提醒"); snoozeEnabledCheck.setTextSize(16); alarmBehaviorSection.addView(snoozeEnabledCheck);
+        snoozeMinutesButton = optionButton();
+        snoozeMinutesButton.setOnClickListener(v -> chooseIntOption("稍后提醒间隔", snoozeMinutesButton,
+                new String[]{"5 分钟","10 分钟","15 分钟","20 分钟"}, new int[]{5,10,15,20}, WorkAlarmOptions.SNOOZE_MINUTES_KEY));
+        LinearLayout snoozeRow = settingInputRow("稍后提醒间隔", dp(150)); snoozeRow.addView(snoozeMinutesButton, compactInputParams(dp(150))); alarmBehaviorSection.addView(snoozeRow);
+
+        snoozeMaxButton = optionButton();
+        snoozeMaxButton.setOnClickListener(v -> chooseIntOption("最多稍后次数", snoozeMaxButton,
+                new String[]{"1 次","2 次","3 次","5 次","不限"}, new int[]{1,2,3,5,99}, WorkAlarmOptions.SNOOZE_MAX_KEY));
+        LinearLayout snoozeMaxRow = settingInputRow("最多稍后次数", dp(150)); snoozeMaxRow.addView(snoozeMaxButton, compactInputParams(dp(150))); alarmBehaviorSection.addView(snoozeMaxRow);
+
+        alarmKeyActionButton = optionButton();
+        alarmKeyActionButton.setOnClickListener(v -> chooseOption("音量/媒体键行为", alarmKeyActionButton,
+                new String[]{"稍后提醒","停止闹钟","保持系统音量功能"}, new String[]{"snooze","stop","volume"}));
+        LinearLayout keyRow = settingInputRow("音量/媒体键", dp(180)); keyRow.addView(alarmKeyActionButton, compactInputParams(dp(180))); alarmBehaviorSection.addView(keyRow);
+
+        alarmBackActionButton = optionButton();
+        alarmBackActionButton.setOnClickListener(v -> chooseOption("返回键行为", alarmBackActionButton,
+                new String[]{"稍后提醒","停止闹钟","禁用返回键"}, new String[]{"snooze","stop","none"}));
+        LinearLayout backRow = settingInputRow("返回键", dp(150)); backRow.addView(alarmBackActionButton, compactInputParams(dp(150))); alarmBehaviorSection.addView(backRow);
+
+        Button testAlarm = new Button(this); testAlarm.setText("测试闹钟（立即响铃）"); UiStyle.button(this, testAlarm, true);
+        LinearLayout.LayoutParams testParams = new LinearLayout.LayoutParams(-1, dp(52)); testParams.topMargin=dp(12); alarmBehaviorSection.addView(testAlarm,testParams);
+        testAlarm.setOnClickListener(v -> testAlarmNow());
+
+        TextView permissionState = text("精确闹钟和全屏闹钟权限会在开启自动闹钟时申请；如被系统关闭，可再次点“自动设置上班闹钟”进入授权。", 12, false);
+        permissionState.setPadding(0,dp(8),0,0); alarmBehaviorSection.addView(permissionState);
 
         LinearLayout dailyHoursRow = settingInputRow("每天工时（自动）", dp(126));
         previewText = text("", 16, true);
@@ -449,7 +521,14 @@ public class SettingsActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+        if (resultCode != RESULT_OK || data == null) return;
+        if (requestCode == REQUEST_RINGTONE) {
+            Uri picked = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+            prefs.edit().putString(WorkAlarmOptions.RINGTONE_URI_KEY, picked == null ? "" : picked.toString()).apply();
+            updateRingtoneButton();
+            return;
+        }
+        if (data.getData() == null) return;
         Uri uri = data.getData();
         if (requestCode == REQUEST_EXPORT) writeBackup(uri);
         else if (requestCode == REQUEST_IMPORT) readBackupForImport(uri);
@@ -851,6 +930,57 @@ public class SettingsActivity extends Activity {
                 }).show();
     }
 
+    private Button optionButton() {
+        Button b=new Button(this); UiStyle.button(this,b,false); return b;
+    }
+
+    private void chooseAlarmRingtone() {
+        Intent i=new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+        i.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_ALARM);
+        i.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+        i.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false);
+        String saved=prefs.getString(WorkAlarmOptions.RINGTONE_URI_KEY,"");
+        Uri existing=saved==null||saved.isEmpty()?RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM):Uri.parse(saved);
+        i.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,existing);
+        startActivityForResult(i,REQUEST_RINGTONE);
+    }
+
+    private void updateRingtoneButton() {
+        if(alarmRingtoneButton==null)return;
+        String saved=prefs.getString(WorkAlarmOptions.RINGTONE_URI_KEY,"");
+        Uri uri=saved==null||saved.isEmpty()?RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM):Uri.parse(saved);
+        try { android.media.Ringtone r=RingtoneManager.getRingtone(this,uri); String title=r==null?"系统默认":r.getTitle(this); alarmRingtoneButton.setText(title); }
+        catch(Exception e){alarmRingtoneButton.setText("系统默认");}
+    }
+
+    private void chooseOption(String title, Button button, String[] labels, String[] values) {
+        new AlertDialog.Builder(this).setTitle(title).setItems(labels,(d,w)->{
+            button.setTag(values[w]); button.setText(labels[w]);
+            String key = button==vibrationPatternButton ? WorkAlarmOptions.VIBRATE_PATTERN_KEY : button==alarmKeyActionButton ? WorkAlarmOptions.KEY_ACTION_KEY : WorkAlarmOptions.BACK_ACTION_KEY;
+            prefs.edit().putString(key,values[w]).apply();
+        }).show();
+    }
+
+    private void chooseIntOption(String title, Button button, String[] labels, int[] values, String key) {
+        new AlertDialog.Builder(this).setTitle(title).setItems(labels,(d,w)->{button.setTag(values[w]);button.setText(labels[w]);prefs.edit().putInt(key,values[w]).apply();}).show();
+    }
+
+    private void setOptionButton(Button button,String value,String[] labels,String[] values){
+        int found=0;for(int i=0;i<values.length;i++)if(values[i].equals(value)){found=i;break;}button.setTag(values[found]);button.setText(labels[found]);
+    }
+    private void setIntOptionButton(Button button,int value,String[] labels,int[] values){
+        int found=0;for(int i=0;i<values.length;i++)if(values[i]==value){found=i;break;}button.setTag(values[found]);button.setText(labels[found]);
+    }
+
+    private void testAlarmNow() {
+        WorkAlarmNotification.requestPermissionIfNeeded(this);
+        WorkAlarmManager.requestAlarmPermissions(this);
+        Intent i=new Intent(this,WorkAlarmRingService.class).setAction(WorkAlarmRingService.ACTION_START);
+        i.putExtra(WorkAlarmRingService.EXTRA_SNOOZE_COUNT,0);
+        try { startForegroundService(i); Toast.makeText(this,"测试闹钟已启动",Toast.LENGTH_SHORT).show(); }
+        catch(Exception e){ Toast.makeText(this,"无法启动测试闹钟："+e.getMessage(),Toast.LENGTH_LONG).show(); }
+    }
+
     private void setAppTheme(String mode) {
         if (mode.equals(AppThemeManager.mode(this))) return;
         AppThemeManager.setMode(this, mode);
@@ -940,6 +1070,16 @@ public class SettingsActivity extends Activity {
         alarmFollowWorkTimeCheck.setChecked(prefs.getBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, true));
         alarmTimeInput.setText(prefs.getString(WorkAlarmManager.ALARM_TIME_KEY, "07:30"));
         alarmUpdateTimeInput.setText(prefs.getString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, "12:00"));
+        alarmVibrateCheck.setChecked(prefs.getBoolean(WorkAlarmOptions.VIBRATE_KEY, WorkAlarmOptions.DEFAULT_VIBRATE));
+        snoozeEnabledCheck.setChecked(prefs.getBoolean(WorkAlarmOptions.SNOOZE_ENABLED_KEY, WorkAlarmOptions.DEFAULT_SNOOZE_ENABLED));
+        setOptionButton(vibrationPatternButton, prefs.getString(WorkAlarmOptions.VIBRATE_PATTERN_KEY, WorkAlarmOptions.DEFAULT_VIBRATE_PATTERN), new String[]{"普通","强烈","间歇"}, new String[]{"normal","strong","pulse"});
+        setIntOptionButton(fadeButton, prefs.getInt(WorkAlarmOptions.FADE_SECONDS_KEY, WorkAlarmOptions.DEFAULT_FADE_SECONDS), new String[]{"关闭","15 秒","30 秒","60 秒"}, new int[]{0,15,30,60});
+        setIntOptionButton(autoStopButton, prefs.getInt(WorkAlarmOptions.AUTO_STOP_MINUTES_KEY, WorkAlarmOptions.DEFAULT_AUTO_STOP_MINUTES), new String[]{"不自动停止","5 分钟","10 分钟","15 分钟","30 分钟"}, new int[]{0,5,10,15,30});
+        setIntOptionButton(snoozeMinutesButton, prefs.getInt(WorkAlarmOptions.SNOOZE_MINUTES_KEY, WorkAlarmOptions.DEFAULT_SNOOZE_MINUTES), new String[]{"5 分钟","10 分钟","15 分钟","20 分钟"}, new int[]{5,10,15,20});
+        setIntOptionButton(snoozeMaxButton, prefs.getInt(WorkAlarmOptions.SNOOZE_MAX_KEY, WorkAlarmOptions.DEFAULT_SNOOZE_MAX), new String[]{"1 次","2 次","3 次","5 次","不限"}, new int[]{1,2,3,5,99});
+        setOptionButton(alarmKeyActionButton, prefs.getString(WorkAlarmOptions.KEY_ACTION_KEY, WorkAlarmOptions.DEFAULT_KEY_ACTION), new String[]{"稍后提醒","停止闹钟","保持系统音量功能"}, new String[]{"snooze","stop","volume"});
+        setOptionButton(alarmBackActionButton, prefs.getString(WorkAlarmOptions.BACK_ACTION_KEY, WorkAlarmOptions.DEFAULT_BACK_ACTION), new String[]{"稍后提醒","停止闹钟","禁用返回键"}, new String[]{"snooze","stop","none"});
+        updateRingtoneButton();
         alarmTimeGroup.setVisibility(alarmFollowWorkTimeCheck.isChecked()
                 ? android.view.View.GONE : android.view.View.VISIBLE);
         alarmOptionsGroup.setVisibility(workAlarmCheck.isChecked()
@@ -1262,7 +1402,9 @@ public class SettingsActivity extends Activity {
                 .putBoolean(WorkAlarmManager.ENABLED_KEY, workAlarmCheck.isChecked())
                 .putBoolean(WorkAlarmManager.FOLLOW_WORK_TIME_KEY, followWorkTime)
                 .putString(WorkAlarmManager.ALARM_TIME_KEY, alarmTime)
-                .putString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, alarmUpdateTime);
+                .putString(WorkAlarmUpdateScheduler.UPDATE_TIME_KEY, alarmUpdateTime)
+                .putBoolean(WorkAlarmOptions.VIBRATE_KEY, alarmVibrateCheck.isChecked())
+                .putBoolean(WorkAlarmOptions.SNOOZE_ENABLED_KEY, snoozeEnabledCheck.isChecked());
 
         if (workStartDate == null) editor.remove(WORK_START_DATE_KEY);
         else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());
@@ -1279,11 +1421,11 @@ public class SettingsActivity extends Activity {
             WorkAlarmNotification.notifySyncResult(this, syncSuccess, false);
             if (syncSuccess) {
                 Toast.makeText(this,
-                        "设置已保存 ｜ 系统闹钟写入请求已成功发送",
+                        "设置已保存 ｜ 工作日闹钟已刷新",
                         Toast.LENGTH_LONG).show();
             } else {
                 Toast.makeText(this,
-                        "设置已保存 ｜ 系统闹钟写入失败，请确认 OxygenOS 时钟可用",
+                        "设置已保存 ｜ 无法设置精确闹钟，请检查“闹钟和提醒”权限",
                         Toast.LENGTH_LONG).show();
             }
         } else {

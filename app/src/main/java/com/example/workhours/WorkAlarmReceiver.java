@@ -10,7 +10,8 @@ public class WorkAlarmReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         Intent service = new Intent(context, WorkAlarmRingService.class)
                 .setAction(WorkAlarmRingService.ACTION_START)
-                .putExtra("alarm_date", intent == null ? "" : intent.getStringExtra("alarm_date"));
+                .putExtra("alarm_date", intent == null ? "" : intent.getStringExtra("alarm_date"))
+                .putExtra(WorkAlarmRingService.EXTRA_SNOOZE_COUNT, intent == null ? 0 : intent.getIntExtra(WorkAlarmRingService.EXTRA_SNOOZE_COUNT, 0));
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service);
         else context.startService(service);
     }

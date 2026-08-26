@@ -89,13 +89,14 @@ public final class WorkAlarmManager {
         }
     }
 
-    public static void scheduleSnooze(Context context, int minutes) {
+    public static void scheduleSnooze(Context context, int minutes, int snoozeCount) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am == null || !canScheduleExact(context)) return;
         Intent fire = new Intent(context, WorkAlarmReceiver.class)
                 .setAction(WorkAlarmReceiver.ACTION_FIRE)
                 .putExtra("alarm_date", LocalDate.now().toString())
-                .putExtra("snooze", true);
+                .putExtra("snooze", true)
+                .putExtra(WorkAlarmRingService.EXTRA_SNOOZE_COUNT, snoozeCount);
         PendingIntent operation = PendingIntent.getBroadcast(context, SNOOZE_REQUEST_CODE, fire,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         long triggerAt = System.currentTimeMillis() + minutes * 60_000L;
