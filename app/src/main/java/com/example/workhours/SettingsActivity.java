@@ -857,7 +857,7 @@ public class SettingsActivity extends Activity {
         String[] heads = {"一","二","三","四","五","六","日"};
         for (int i=0;i<7;i++) {
             TextView h=text(heads[i],13,true); h.setGravity(Gravity.CENTER);
-            if (i>=5) h.setTextColor(0xFFB14A4A);
+            if (i>=5) h.setTextColor(UiStyle.WEEKEND_TEXT);
             GridLayout.LayoutParams hp=new GridLayout.LayoutParams(); hp.width=0; hp.height=dp(34); hp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f);
             monthlyRestCalendarGrid.addView(h,hp);
         }
@@ -873,8 +873,8 @@ public class SettingsActivity extends Activity {
             boolean weekend=date.getDayOfWeek()==java.time.DayOfWeek.SATURDAY||date.getDayOfWeek()==java.time.DayOfWeek.SUNDAY;
             Button b=new Button(this); b.setText(String.valueOf(day)); b.setTextSize(13); b.setAllCaps(false); b.setMinWidth(0); b.setMinHeight(0); b.setPadding(0,0,0,0);
             boolean sel=selected.contains(day);
-            b.setTextColor(sel ? android.graphics.Color.WHITE : (weekend ? 0xFFB14A4A : UiStyle.TEXT));
-            b.setBackground(UiStyle.roundRect(this, sel ? UiStyle.PRIMARY : (weekend ? 0xFFFFF4F4 : UiStyle.CARD_BG), 10, sel ? UiStyle.PRIMARY : UiStyle.BORDER, 1));
+            b.setTextColor(sel ? android.graphics.Color.WHITE : (weekend ? UiStyle.WEEKEND_TEXT : UiStyle.TEXT));
+            b.setBackground(UiStyle.roundRect(this, sel ? UiStyle.PRIMARY : (weekend ? UiStyle.CAL_WEEKEND_BG : UiStyle.CARD_BG), 10, sel ? UiStyle.PRIMARY : UiStyle.BORDER, 1));
             b.setOnClickListener(v -> { Set<Integer> cur=selectedMonthlyRestDays(); if(cur.contains(day))cur.remove(day);else cur.add(day); writeSelectedMonthlyRestDays(cur); rebuildMonthlyRestCalendar(); });
             GridLayout.LayoutParams gp=new GridLayout.LayoutParams(); gp.width=0; gp.height=dp(46); gp.columnSpec=GridLayout.spec(GridLayout.UNDEFINED,1f); gp.setMargins(dp(2),dp(2),dp(2),dp(2));
             monthlyRestCalendarGrid.addView(b,gp);

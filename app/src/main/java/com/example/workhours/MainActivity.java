@@ -257,7 +257,7 @@ public class MainActivity extends Activity {
         if (calendarGrid == null) return;
         calendarGrid.removeAllViews();
         String[] hs={"一","二","三","四","五","六","日"};
-        for(int i=0;i<7;i++){TextView h=text(hs[i],13,true);h.setGravity(Gravity.CENTER);if(i>=5)h.setTextColor(0xFF5F6368);calendarGrid.addView(h,gridParams());}
+        for(int i=0;i<7;i++){TextView h=text(hs[i],13,true);h.setGravity(Gravity.CENTER);if(i>=5)h.setTextColor(UiStyle.WEEKEND_TEXT);calendarGrid.addView(h,gridParams());}
         LocalDate ws=getWorkStartDate();
         int leading=displayedMonth.atDay(1).getDayOfWeek().getValue()-1,days=displayedMonth.lengthOfMonth(),cells=((leading+days+6)/7)*7;
         float daily=getConfiguredDailyHours();
@@ -270,13 +270,13 @@ public class MainActivity extends Activity {
             float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured),overtime=(future||before)?0:getOvertimeHours(d),total=normal+overtime;
             float wage=(future||before||wagePanel==null)?0:wagePanel.getWageForDateValue(d);
             LinearLayout cell=vertical(); cell.setGravity(Gravity.CENTER); cell.setPadding(dp(2),dp(6),dp(2),dp(5));
-            if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,0xFFE8F0FE,12,0xFFB8C8FF,1));
-            else if(leave)cell.setBackground(UiStyle.roundRect(this,0xFFFFF0F0,12,0xFFF2CACA,1));
-            else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,0xFFF1F8F3,12,0xFFCDE7D4,1));
-            else if(override)cell.setBackground(UiStyle.roundRect(this,0xFFFFF7E8,12,0xFFF1D8A6,1));
-            else if(holiday)cell.setBackground(UiStyle.roundRect(this,0xFFFFF2F4,12,0xFFF3CDD3,1));
-            else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,0xFFF4F6F9,12,0xFFE1E6EE,1));
-            TextView dt=text(String.valueOf(day),14,d.equals(today)); dt.setGravity(Gravity.CENTER); if(future||before)dt.setTextColor(0xFF9AA0A6); cell.addView(dt);
+            if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_TODAY_BG,12,UiStyle.CAL_TODAY_BORDER,1));
+            else if(leave)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_LEAVE_BG,12,UiStyle.CAL_LEAVE_BORDER,1));
+            else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERTIME_BG,12,UiStyle.CAL_OVERTIME_BORDER,1));
+            else if(override)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERRIDE_BG,12,UiStyle.CAL_OVERRIDE_BORDER,1));
+            else if(holiday)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_HOLIDAY_BG,12,UiStyle.CAL_HOLIDAY_BORDER,1));
+            else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_REST_BG,12,UiStyle.CAL_REST_BORDER,1));
+            TextView dt=text(String.valueOf(day),14,d.equals(today)); dt.setGravity(Gravity.CENTER); if(future||before)dt.setTextColor(UiStyle.CAL_DISABLED_TEXT); cell.addView(dt);
             String value="";
             if(!future&&!before){
                 if(showingWageStats){
@@ -375,7 +375,7 @@ public class MainActivity extends Activity {
 
     private void rebuildCalendar(LocalDate today) {
         calendarGrid.removeAllViews(); String[] hs = {"一","二","三","四","五","六","日"};
-        for (int i=0;i<7;i++){TextView h=text(hs[i],13,true);h.setGravity(Gravity.CENTER);if(i>=5)h.setTextColor(0xFF5F6368);calendarGrid.addView(h,gridParams());}
+        for (int i=0;i<7;i++){TextView h=text(hs[i],13,true);h.setGravity(Gravity.CENTER);if(i>=5)h.setTextColor(UiStyle.WEEKEND_TEXT);calendarGrid.addView(h,gridParams());}
         LocalDate ws=getWorkStartDate(); int leading=displayedMonth.atDay(1).getDayOfWeek().getValue()-1, days=displayedMonth.lengthOfMonth(), cells=((leading+days+6)/7)*7; float daily=getConfiguredDailyHours();
         for(int i=0;i<cells;i++){
             int day=i-leading+1; if(day<1||day>days){calendarGrid.addView(text("",13,false),gridParams());continue;}
@@ -383,8 +383,8 @@ public class MainActivity extends Activity {
             boolean holiday=!before&&isBankHoliday(d), leave=!holiday&&!before&&isLeave(d), manualRest=!holiday&&!leave&&!before&&isManualRest(d), configured=!before&&isConfiguredWorkDay(d)&&!holiday, override=!holiday&&!leave&&!manualRest&&!before&&hasOverride(d), autoRest=!holiday&&!leave&&!manualRest&&!override&&!before&&!configured;
             float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured), overtime=(future||before)?0:getOvertimeHours(d), total=normal+overtime;
             LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);cell.setPadding(dp(2),dp(6),dp(2),dp(5));
-            if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,0xFFE8F0FE,12,0xFFB8C8FF,1));else if(leave)cell.setBackground(UiStyle.roundRect(this,0xFFFFF0F0,12,0xFFF2CACA,1));else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,0xFFF1F8F3,12,0xFFCDE7D4,1));else if(override)cell.setBackground(UiStyle.roundRect(this,0xFFFFF7E8,12,0xFFF1D8A6,1));else if(holiday)cell.setBackground(UiStyle.roundRect(this,0xFFFFF2F4,12,0xFFF3CDD3,1));else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,0xFFF4F6F9,12,0xFFE1E6EE,1));
-            TextView dt=text(String.valueOf(day),14,d.equals(today));dt.setGravity(Gravity.CENTER);if(future||before)dt.setTextColor(0xFF9AA0A6);cell.addView(dt);
+            if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_TODAY_BG,12,UiStyle.CAL_TODAY_BORDER,1));else if(leave)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_LEAVE_BG,12,UiStyle.CAL_LEAVE_BORDER,1));else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERTIME_BG,12,UiStyle.CAL_OVERTIME_BORDER,1));else if(override)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERRIDE_BG,12,UiStyle.CAL_OVERRIDE_BORDER,1));else if(holiday)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_HOLIDAY_BG,12,UiStyle.CAL_HOLIDAY_BORDER,1));else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_REST_BG,12,UiStyle.CAL_REST_BORDER,1));
+            TextView dt=text(String.valueOf(day),14,d.equals(today));dt.setGravity(Gravity.CENTER);if(future||before)dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);cell.addView(dt);
             String status=""; if(before)status="未开始";else if(!future){if(holiday)status="公共假日";else if(leave)status="请假";else if(manualRest||autoRest)status=overtime>0?"加班 "+shortHours(overtime):"休息";else if(total>0)status=shortHours(total)+(overtime>0?" 加班":"");}
             TextView st=text(status,10,leave||holiday||manualRest||override||autoRest||overtime>0);st.setGravity(Gravity.CENTER);cell.addView(st);
             if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：公共假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});

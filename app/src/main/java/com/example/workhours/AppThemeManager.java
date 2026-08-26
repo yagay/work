@@ -42,9 +42,12 @@ final class AppThemeManager {
     static void applySystemBars(Activity activity) {
         boolean dark = isDark(activity);
         Window window = activity.getWindow();
+        window.getDecorView().setBackgroundColor(UiStyle.PAGE_BG);
         window.setStatusBarColor(UiStyle.PAGE_BG);
         window.setNavigationBarColor(UiStyle.PAGE_BG);
         try {
+            window.setStatusBarContrastEnforced(false);
+            window.setNavigationBarContrastEnforced(false);
             WindowInsetsController controller = window.getInsetsController();
             if (controller != null) {
                 int mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
