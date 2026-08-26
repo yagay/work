@@ -313,8 +313,10 @@ public class SettingsActivity extends Activity {
                 new String[]{"稍后提醒","停止闹钟","禁用返回键"}, new String[]{"snooze","stop","none"}));
         LinearLayout backRow = settingInputRow("返回键", dp(150)); backRow.addView(alarmBackActionButton, compactInputParams(dp(150))); alarmBehaviorSection.addView(backRow);
 
-        Button testAlarm = new Button(this); testAlarm.setText("测试闹钟（立即响铃）"); UiStyle.button(this, testAlarm, true);
-        LinearLayout.LayoutParams testParams = new LinearLayout.LayoutParams(-1, dp(UI_ACTION_DP)); testParams.topMargin=dp(12); alarmBehaviorSection.addView(testAlarm,testParams);
+        Button testAlarm = actionRow("测试闹钟");
+        LinearLayout.LayoutParams testParams = new LinearLayout.LayoutParams(-1, dp(UI_ROW_DP));
+        testParams.topMargin = dp(8);
+        alarmBehaviorSection.addView(testAlarm, testParams);
         testAlarm.setOnClickListener(v -> testAlarmNow());
 
         TextView permissionState = text("精确闹钟和全屏闹钟权限会在开启自动闹钟时申请；如被系统关闭，可再次点“自动设置上班闹钟”进入授权。", 12, false);
@@ -447,11 +449,9 @@ public class SettingsActivity extends Activity {
         currentWageCard.addView(currentHint);
         wageSection.addView(currentWageCard);
 
-        Button addWageChange = new Button(this);
-        addWageChange.setText("＋ 新增工资变更");
-        UiStyle.button(this, addWageChange, true);
-        LinearLayout.LayoutParams addWageParams = new LinearLayout.LayoutParams(-1, dp(UI_ACTION_DP));
-        addWageParams.topMargin = dp(10);
+        Button addWageChange = actionRow("＋  新增工资变更");
+        LinearLayout.LayoutParams addWageParams = new LinearLayout.LayoutParams(-1, dp(UI_ROW_DP));
+        addWageParams.topMargin = dp(8);
         wageSection.addView(addWageChange, addWageParams);
         addWageChange.setOnClickListener(v -> showAddWageChangeDialog());
 
@@ -467,19 +467,15 @@ public class SettingsActivity extends Activity {
         backupInfo.setPadding(0, 0, 0, dp(8));
         backupSection.addView(backupInfo);
 
-        Button export = new Button(this);
-        UiStyle.button(this, export, false);
-        export.setText("导出全部数据");
+        Button export = actionRow("导出全部数据");
         export.setOnClickListener(v -> exportBackup());
         backupSection.addView(export, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(UI_ACTION_DP)));
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(UI_ROW_DP)));
 
-        Button importButton = new Button(this);
-        UiStyle.button(this, importButton, false);
-        importButton.setText("导入 / 恢复数据");
+        Button importButton = actionRow("导入 / 恢复数据");
         LinearLayout.LayoutParams importParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(UI_ACTION_DP));
-        importParams.topMargin = dp(8);
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(UI_ROW_DP));
+        importParams.topMargin = dp(6);
         backupSection.addView(importButton, importParams);
         importButton.setOnClickListener(v -> importBackup());
 
@@ -948,6 +944,20 @@ public class SettingsActivity extends Activity {
         b.setMinHeight(0);
         b.setMinimumHeight(0);
         b.setPadding(dp(8),0,dp(10),0);
+        return b;
+    }
+
+    private Button actionRow(String label) {
+        Button b = new Button(this);
+        b.setAllCaps(false);
+        b.setText(label + "  ›");
+        b.setTextSize(UI_LABEL_SP);
+        b.setTextColor(UiStyle.TEXT);
+        b.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(14), 0, dp(12), 0);
+        b.setBackground(UiStyle.roundRect(this, UiStyle.CARD_BG, 12, UiStyle.BORDER, 1));
         return b;
     }
 
