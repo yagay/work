@@ -112,6 +112,7 @@ public class SettingsActivity extends Activity {
     private LinearLayout wageHistoryContainer;
     private Button themeModeButton;
     private boolean appliedDarkTheme;
+    private boolean loadingSettings = false;
     private final Button[] restDayButtons = new Button[7];
 
     @Override
@@ -122,6 +123,7 @@ public class SettingsActivity extends Activity {
         setContentView(buildUi());
         AppThemeManager.applySystemBars(this);
         loadSettings();
+        setupInstantSave();
     }
 
     @Override
@@ -218,9 +220,11 @@ public class SettingsActivity extends Activity {
         workAlarmCheck.setText("自动设置上班闹钟");
         workAlarmCheck.setTextSize(UI_LABEL_SP);
         workAlarmCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            if (isChecked) { WorkAlarmNotification.requestPermissionIfNeeded(this); WorkAlarmManager.requestAlarmPermissions(this); }
             if (alarmOptionsGroup != null) alarmOptionsGroup.setVisibility(
                     isChecked ? android.view.View.VISIBLE : android.view.View.GONE);
+            if (loadingSettings) return;
+            if (isChecked) { WorkAlarmNotification.requestPermissionIfNeeded(this); WorkAlarmManager.requestAlarmPermissions(this); }
+            persistSettings(false, false);
         });
         alarmSection.addView(workAlarmCheck);
 
@@ -240,7 +244,10 @@ public class SettingsActivity extends Activity {
 
         Runnable updateAlarmTimeVisibility = () -> alarmTimeGroup.setVisibility(
                 alarmFollowWorkTimeCheck.isChecked() ? android.view.View.GONE : android.view.View.VISIBLE);
-        alarmFollowWorkTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> updateAlarmTimeVisibility.run());
+        alarmFollowWorkTimeCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            updateAlarmTimeVisibility.run();
+            if (!loadingSettings) persistSettings(false, false);
+        });
 
         LinearLayout updateTimeRow = settingInputRow("每周同步时间", dp(126));
         alarmUpdateTimeInput = input("12:00", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
@@ -381,7 +388,11 @@ public class SettingsActivity extends Activity {
         for (int i = 0; i < 7; i++) {
             Button day = new Button(this);
             day.setText(names[i]); day.setTextSize(14); day.setAllCaps(false); day.setMinHeight(0); day.setMinWidth(0); day.setPadding(dp(6),0,dp(6),0);
-            day.setOnClickListener(v -> { day.setSelected(!day.isSelected()); updateRestDayButtonStyle(day); });
+            day.setOnClickListener(v -> {
+                day.setSelected(!day.isSelected());
+                updateRestDayButtonStyle(day);
+                if (!loadingSettings) persistSettings(false, false);
+            });
             restDayButtons[i] = day;
             LinearLayout target = i < 4 ? restRow1 : restRow2;
             LinearLayout.LayoutParams dayParams = new LinearLayout.LayoutParams(0, dp(44), 1f);
@@ -451,16 +462,6 @@ public class SettingsActivity extends Activity {
         wageHistoryContainer.setOrientation(LinearLayout.VERTICAL);
         wageSection.addView(wageHistoryContainer);
 
-        Button save = new Button(this);
-        UiStyle.button(this, save, true);
-        save.setText("保存设置");
-        save.setTextSize(UI_LABEL_SP);
-        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(UI_ACTION_DP));
-        saveParams.topMargin = dp(22);
-        root.addView(save, saveParams);
-        save.setOnClickListener(v -> save());
-
         LinearLayout backupSection = createCollapsibleSection(root, "数据备份与迁移", false);
         TextView backupInfo = text("导出会保存全部设置、休息规则、请假原因、手动状态和单日上下班时间。可复制到另一台手机后导入恢复。", UI_BODY_SP, false);
         backupInfo.setPadding(0, 0, 0, dp(8));
@@ -501,7 +502,8 @@ public class SettingsActivity extends Activity {
                 .setPositiveButton("确认清除", (dialog, which) -> {
                     workStartDate = null;
                     updateWorkStartDateButton();
-                    Toast.makeText(this, "工作开始日期已清除，点击保存设置后生效", Toast.LENGTH_SHORT).show();
+                    persistSettings(false, false);
+                    Toast.makeText(this, "工作开始日期已清除", Toast.LENGTH_SHORT).show();
                 })
                 .show();
     }
@@ -821,6 +823,7 @@ public class SettingsActivity extends Activity {
             weeklyRestModeButton.setText((monthly ? "每月固定休息日" : "每周休息日") + "  ›");
         }
         if (monthly && monthlyRestCalendarGrid != null) rebuildMonthlyRestCalendar();
+        if (!loadingSettings) persistSettings(false, false);
     }
 
     private void updateRestModeButtonStyle(Button button, boolean selected) {
@@ -844,6 +847,7 @@ public class SettingsActivity extends Activity {
         for (int d = 1; d <= 31; d++) if (days.contains(d)) { if (out.length() > 0) out.append(", "); out.append(d); }
         monthlyRestInput.setText(out.toString());
         updateMonthlyRestButton();
+        if (!loadingSettings) persistSettings(false, false);
     }
 
     private void rebuildMonthlyRestCalendar() {
@@ -1128,6 +1132,7 @@ public class SettingsActivity extends Activity {
     }
 
     private void loadSettings() {
+        loadingSettings = true;
         startInput.setText(prefs.getString(START_TIME_KEY, "09:00"));
         endInput.setText(prefs.getString(END_TIME_KEY, "17:30"));
         breakInput.setText(String.valueOf(prefs.getInt(BREAK_MINUTES_KEY, 30)));
@@ -1177,6 +1182,7 @@ public class SettingsActivity extends Activity {
             updateRestDayButtonStyle(restDayButtons[i]);
         }
         updatePreview(false);
+        loadingSettings = false;
     }
 
     private JSONArray readWageHistory() {
@@ -1429,6 +1435,7 @@ public class SettingsActivity extends Activity {
                 (view, year, month, dayOfMonth) -> {
                     workStartDate = LocalDate.of(year, month + 1, dayOfMonth);
                     updateWorkStartDateButton();
+                    if (!loadingSettings) persistSettings(false, false);
                 }, initial.getYear(), initial.getMonthValue() - 1, initial.getDayOfMonth());
         dialog.getDatePicker().setMaxDate(System.currentTimeMillis());
         dialog.show();
@@ -1439,26 +1446,29 @@ public class SettingsActivity extends Activity {
                 : workStartDate.format(DateTimeFormatter.ofPattern("yyyy-MM-dd")));
     }
 
-    private void save() {
-        Float dailyHours = calculate(true);
-        if (dailyHours == null) return;
-        String monthlyRestDays = normalizeMonthlyRestDays(true);
-        if (monthlyRestDays == null) return;
+    private boolean persistSettings(boolean showError, boolean showToast) {
+        if (loadingSettings) return false;
+        Float dailyHours = calculate(showError);
+        if (dailyHours == null) return false;
+        String monthlyRestDays = normalizeMonthlyRestDays(showError);
+        if (monthlyRestDays == null) return false;
 
-        int breakMinutes = Integer.parseInt(breakInput.getText().toString().trim());
+        int breakMinutes;
+        try { breakMinutes = Integer.parseInt(breakInput.getText().toString().trim()); }
+        catch (Exception e) { if (showError) breakInput.setError("请输入正确的分钟数"); return false; }
         String start = normalizeTime(startInput.getText().toString());
         String end = normalizeTime(endInput.getText().toString());
         boolean followWorkTime = alarmFollowWorkTimeCheck.isChecked();
         String alarmTime = normalizeTime(alarmTimeInput.getText().toString());
         if (workAlarmCheck.isChecked() && !followWorkTime && parseTime(alarmTime) == null) {
-            alarmTimeInput.setError("请输入 HH:mm，例如 07:30");
-            return;
+            if (showError) alarmTimeInput.setError("请输入 HH:mm，例如 07:30");
+            return false;
         }
         if (parseTime(alarmTime) == null) alarmTime = "07:30";
         String alarmUpdateTime = normalizeTime(alarmUpdateTimeInput.getText().toString());
         if (workAlarmCheck.isChecked() && parseTime(alarmUpdateTime) == null) {
-            alarmUpdateTimeInput.setError("请输入 HH:mm，例如 12:00");
-            return;
+            if (showError) alarmUpdateTimeInput.setError("请输入 HH:mm，例如 12:00");
+            return false;
         }
         if (parseTime(alarmUpdateTime) == null) alarmUpdateTime = "12:00";
 
@@ -1479,39 +1489,46 @@ public class SettingsActivity extends Activity {
 
         if (workStartDate == null) editor.remove(WORK_START_DATE_KEY);
         else editor.putString(WORK_START_DATE_KEY, workStartDate.toString());
-
-        for (int i = 0; i < 7; i++) {
-            editor.putBoolean("day_" + i, !restDayButtons[i].isSelected());
-        }
+        for (int i = 0; i < 7; i++) editor.putBoolean("day_" + i, !restDayButtons[i].isSelected());
         editor.apply();
 
         if (workAlarmCheck.isChecked()) {
-            WorkAlarmNotification.requestPermissionIfNeeded(this);
             WorkAlarmUpdateScheduler.schedule(this);
-            boolean syncSuccess = WorkAlarmManager.forceSync(this);
-            WorkAlarmNotification.notifySyncResult(this, syncSuccess, false);
-            if (syncSuccess) {
-                Toast.makeText(this,
-                        "设置已保存 ｜ 工作日闹钟已刷新",
-                        Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(this,
-                        "设置已保存 ｜ 无法设置精确闹钟，请检查“闹钟和提醒”权限",
-                        Toast.LENGTH_LONG).show();
-            }
+            WorkAlarmManager.forceSync(this);
         } else {
             WorkAlarmManager.cancel(this);
             WorkAlarmUpdateScheduler.cancel(this);
-            Toast.makeText(this, "设置已保存 ｜ 自动闹钟已关闭", Toast.LENGTH_SHORT).show();
         }
 
+        loadingSettings = true;
         startInput.setText(start);
         endInput.setText(end);
         alarmTimeInput.setText(alarmTime);
         alarmUpdateTimeInput.setText(alarmUpdateTime);
         monthlyRestInput.setText(monthlyRestDays);
+        loadingSettings = false;
         updateMonthlyRestButton();
         updatePreview(false);
+        if (showToast) Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show();
+        return true;
+    }
+
+    private void setupInstantSave() {
+        android.view.View.OnFocusChangeListener saver = (v, hasFocus) -> {
+            if (!hasFocus && !loadingSettings) persistSettings(true, false);
+        };
+        startInput.setOnFocusChangeListener(saver);
+        endInput.setOnFocusChangeListener(saver);
+        breakInput.setOnFocusChangeListener(saver);
+        alarmTimeInput.setOnFocusChangeListener(saver);
+        alarmUpdateTimeInput.setOnFocusChangeListener(saver);
+
+        alarmVibrateCheck.setOnCheckedChangeListener((b, checked) -> {
+            if (!loadingSettings) persistSettings(false, false);
+        });
+        snoozeEnabledCheck.setOnCheckedChangeListener((b, checked) -> {
+            if (!loadingSettings) persistSettings(false, false);
+        });
     }
 
     private String normalizeMonthlyRestDays(boolean showError) {
