@@ -249,7 +249,10 @@ public class SettingsActivity extends Activity {
         updateTimeInfo.setPadding(0, dp(4), 0, 0);
         alarmOptionsGroup.addView(updateTimeInfo);
 
-        LinearLayout alarmBehaviorSection = createCollapsibleSection(root, "闹钟响铃设置", false);
+        LinearLayout alarmBehaviorSection = alarmOptionsGroup;
+        TextView alarmBehaviorTitle = text("响铃与稍后提醒", 17, true);
+        alarmBehaviorTitle.setPadding(0, dp(18), 0, dp(6));
+        alarmBehaviorSection.addView(alarmBehaviorTitle);
         TextView behaviorInfo = text("单独设置铃声、震动、渐强、稍后提醒和按键行为。电源键/Home 键由 Android 系统保留，App 无法可靠拦截。", 13, false);
         behaviorInfo.setPadding(0, 0, 0, dp(8));
         alarmBehaviorSection.addView(behaviorInfo);
@@ -323,7 +326,11 @@ public class SettingsActivity extends Activity {
         endInput.addTextChangedListener(hoursWatcher);
         breakInput.addTextChangedListener(hoursWatcher);
 
-        LinearLayout holidaySection = createCollapsibleSection(root, "公共假日", false);
+        LinearLayout restHolidaySection = createCollapsibleSection(root, "休息与公共假日", true);
+        LinearLayout holidaySection = restHolidaySection;
+        TextView holidayTitle = text("公共假日", 17, true);
+        holidayTitle.setPadding(0, 0, 0, dp(6));
+        holidaySection.addView(holidayTitle);
         TextView holidayInfo = text("选择国家或地区后，公共假日会自动从工时、工资和上班闹钟中排除。", 13, false);
         holidayInfo.setPadding(0, 0, 0, dp(8));
         holidaySection.addView(holidayInfo);
@@ -338,7 +345,10 @@ public class SettingsActivity extends Activity {
         holidayHistoryContainer.setOrientation(LinearLayout.VERTICAL);
         holidaySection.addView(holidayHistoryContainer);
 
-        LinearLayout restSection = createCollapsibleSection(root, "休息规则", true);
+        LinearLayout restSection = restHolidaySection;
+        TextView restTitle = text("休息规则", 17, true);
+        restTitle.setPadding(0, dp(20), 0, dp(6));
+        restSection.addView(restTitle);
         TextView restRuleInfo = text("每周休息日和每月固定休息日二选一，只会使用当前选中的规则。", 13, false);
         restRuleInfo.setPadding(0, 0, 0, dp(8));
         restSection.addView(restRuleInfo);
