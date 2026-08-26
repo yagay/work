@@ -54,6 +54,7 @@ public class SettingsActivity extends Activity {
     private static final int UI_BODY_SP = 13;
     private static final int UI_ROW_DP = 42;
     private static final int UI_ACTION_DP = 46;
+    private static final int UI_PRIMARY_MENU_DP = 52;
 
     private static final String PREFS = "work_hours_prefs";
     private static final String START_TIME_KEY = "start_time";
@@ -1069,20 +1070,22 @@ public class SettingsActivity extends Activity {
         LinearLayout wrapper = new LinearLayout(this);
         wrapper.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams wrapperParams = new LinearLayout.LayoutParams(-1, -2);
-        wrapperParams.topMargin = dp(6);
+        wrapperParams.topMargin = dp(9);
         root.addView(wrapper, wrapperParams);
 
         Button header = new Button(this);
         header.setAllCaps(false);
-        header.setTextSize(UI_LABEL_SP);
+        header.setTextSize(UI_SECTION_TITLE_SP);
+        header.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         header.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(14), 0, dp(14), 0);
-        UiStyle.button(this, header, false);
-        wrapper.addView(header, new LinearLayout.LayoutParams(-1, dp(UI_ACTION_DP)));
+        header.setPadding(dp(16), 0, dp(14), 0);
+        header.setTextColor(UiStyle.PRIMARY);
+        header.setBackground(UiStyle.roundRect(this, UiStyle.PRIMARY_SOFT, 16, UiStyle.BORDER, 1));
+        wrapper.addView(header, new LinearLayout.LayoutParams(-1, dp(UI_PRIMARY_MENU_DP)));
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(4), dp(5), dp(4), dp(5));
+        content.setPadding(dp(10), dp(7), dp(6), dp(5));
         wrapper.addView(content, new LinearLayout.LayoutParams(-1, -2));
 
         final boolean[] open = {expanded};
