@@ -11,6 +11,10 @@ public class WorkAlarmReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         if (intent == null || !ACTION_FIRE.equals(intent.getAction())) return;
 
+        // A user-configurable snooze can now be long enough to overlap the next
+        // normal work alarm. Once any alarm actually fires, the pending snooze
+        // PendingIntent is no longer useful and must not survive to ring again.
+        WorkAlarmManager.cancelSnooze(context);
         WorkAlarmReminderNotification.cancel(context);
 
         int snoozeCount = intent.getIntExtra(
