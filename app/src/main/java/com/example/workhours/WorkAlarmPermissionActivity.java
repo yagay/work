@@ -15,25 +15,37 @@ import android.widget.Toast;
 
 /**
  * Coordinates all permissions required for reliable alarm presentation.
- *
- * The settings page previously opened exact-alarm and full-screen-intent settings
- * independently. If both were missing, Android only showed the first page and the
- * second permission was never requested. This tiny activity serializes the flow.
+ * Notification denial must not prevent exact-alarm/full-screen access from being
+ * checked, and duplicate callers should not launch two permission flows at once.
  */
 public class WorkAlarmPermissionActivity extends Activity {
     private static final int REQUEST_NOTIFICATIONS = 7401;
     private static final int REQUEST_EXACT_ALARM = 7402;
     private static final int REQUEST_FULL_SCREEN = 7403;
+    private static final String STATE_NOTIFICATION_STEP_COMPLETE = "notification_step_complete";
 
-    public static void request(Activity activity) {
-        Intent intent = new Intent(activity, WorkAlarmPermissionActivity.class)
-                .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        activity.startActivity(intent);
+    private static boolean requestInFlight;
+    private boolean notificationStepComplete;
+
+    public static synchronized void request(Activity activity) {
+        if (requestInFlight) return;
+        requestInFlight = true;
+        try {
+            Intent intent = new Intent(activity, WorkAlarmPermissionActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            activity.startActivity(intent);
+        } catch (RuntimeException e) {
+            requestInFlight = false;
+            throw e;
+        }
     }
 
     @Override protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestInFlight = true;
+        notificationStepComplete = savedInstanceState != null
+                && savedInstanceState.getBoolean(STATE_NOTIFICATION_STEP_COMPLETE, false);
         continuePermissionFlow();
     }
 
@@ -43,8 +55,19 @@ public class WorkAlarmPermissionActivity extends Activity {
         continuePermissionFlow();
     }
 
+    @Override protected void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean(STATE_NOTIFICATION_STEP_COMPLETE, notificationStepComplete);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override protected void onDestroy() {
+        requestInFlight = false;
+        super.onDestroy();
+    }
+
     private void continuePermissionFlow() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+        if (!notificationStepComplete
+                && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(
@@ -52,6 +75,7 @@ public class WorkAlarmPermissionActivity extends Activity {
                     REQUEST_NOTIFICATIONS);
             return;
         }
+        notificationStepComplete = true;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !canScheduleExactAlarms()) {
             try {
@@ -85,15 +109,17 @@ public class WorkAlarmPermissionActivity extends Activity {
             int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode != REQUEST_NOTIFICATIONS) return;
-        if (WorkAlarmNotification.canPostNotifications(this)) {
-            continuePermissionFlow();
-        } else {
+
+        notificationStepComplete = true;
+        if (!WorkAlarmNotification.canPostNotifications(this)) {
             Toast.makeText(
                     this,
                     "未允许通知：闹钟仍可能响铃，但看不到停止通知",
                     Toast.LENGTH_LONG).show();
-            finish();
         }
+        // Notification permission is optional for scheduling itself. Continue so a
+        // denial here never prevents the exact-alarm/full-screen checks below.
+        continuePermissionFlow();
     }
 
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -109,15 +135,13 @@ public class WorkAlarmPermissionActivity extends Activity {
                 finish();
             }
         } else if (requestCode == REQUEST_FULL_SCREEN) {
-            if (canUseFullScreenIntent()) {
-                finish();
-            } else {
+            if (!canUseFullScreenIntent()) {
                 Toast.makeText(
                         this,
                         "未允许全屏提醒：锁屏时可能只显示顶部闹钟通知",
                         Toast.LENGTH_LONG).show();
-                finish();
             }
+            finish();
         }
     }
 
