@@ -55,11 +55,6 @@ public class WorkAlarmRingService extends Service {
             try {
                 int current = audioManager.getStreamVolume(AudioManager.STREAM_ALARM);
                 if (lastAlarmVolume >= 0 && current != lastAlarmVolume) {
-                    // dispatchKeyEvent() only works while the alarm Activity has focus.
-                    // When Android shows a heads-up notification instead, a volume-key
-                    // press changes STREAM_ALARM. Detect that change in the ringing
-                    // service and restore the previous volume before applying the
-                    // configured key action.
                     try {
                         audioManager.setStreamVolume(
                                 AudioManager.STREAM_ALARM,
@@ -108,6 +103,16 @@ public class WorkAlarmRingService extends Service {
         if (ACTION_SNOOZE.equals(action)) {
             snooze();
             return START_NOT_STICKY;
+        }
+
+        // A duplicate/manual trigger can arrive while this service is already
+        // ringing. Always tear down the previous cycle before replacing its fields;
+        // otherwise an old Ringtone can keep playing after its reference is lost.
+        if (ringing || ringtone != null || vibrator != null || mediaSession != null) {
+            ringing = false;
+            handler.removeCallbacksAndMessages(null);
+            stopAlarmResources();
+            releaseHardwareControls();
         }
 
         currentSnoozeCount = intent == null
