@@ -16,6 +16,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 public final class WorkAlarmManager {
@@ -25,6 +26,7 @@ public final class WorkAlarmManager {
     public static final String ALARM_LABEL = "上班闹钟";
 
     private static final String PREFS = "work_hours_prefs";
+    private static final String RUNTIME_PREFS = "work_alarm_runtime";
     private static final String START_TIME_KEY = "start_time";
     private static final String WORK_START_DATE_KEY = "work_start_date";
     private static final String MONTHLY_REST_DAYS_KEY = "monthly_rest_days";
@@ -47,10 +49,51 @@ public final class WorkAlarmManager {
     public static boolean forceSyncNextWeek(Context context) { return rebuild(context); }
     public static boolean forceSync(Context context) { return rebuild(context); }
 
+    private static SharedPreferences configPrefs(Context context) {
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    private static SharedPreferences runtimePrefs(Context context) {
+        return context.getSharedPreferences(RUNTIME_PREFS, Context.MODE_PRIVATE);
+    }
+
+    private static void migrateLegacyRuntimeState(Context context) {
+        SharedPreferences config = configPrefs(context);
+        SharedPreferences runtime = runtimePrefs(context);
+        SharedPreferences.Editor runtimeEditor = runtime.edit();
+        SharedPreferences.Editor configEditor = config.edit();
+        boolean changed = false;
+
+        Set<String> legacyScheduled = config.getStringSet(SCHEDULED_DATES_KEY, null);
+        if (legacyScheduled != null) {
+            runtimeEditor.putStringSet(SCHEDULED_DATES_KEY, new HashSet<>(legacyScheduled));
+            configEditor.remove(SCHEDULED_DATES_KEY);
+            changed = true;
+        }
+
+        for (Map.Entry<String, ?> entry : config.getAll().entrySet()) {
+            String key = entry.getKey();
+            if (!key.startsWith(SKIP_ALARM_PREFIX)) continue;
+            Object value = entry.getValue();
+            if (value instanceof Boolean) {
+                runtimeEditor.putBoolean(key, (Boolean) value);
+            }
+            configEditor.remove(key);
+            changed = true;
+        }
+
+        if (changed) {
+            runtimeEditor.commit();
+            configEditor.apply();
+        }
+    }
+
     private static boolean rebuild(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        migrateLegacyRuntimeState(context);
+        SharedPreferences prefs = configPrefs(context);
+        SharedPreferences runtime = runtimePrefs(context);
         LocalDate today = LocalDate.now();
-        cleanupExpiredSkipMarkers(prefs, today);
+        cleanupExpiredSkipMarkers(runtime, today);
         cancelScheduled(context);
         if (!prefs.getBoolean(ENABLED_KEY, false)) return true;
         if (!canScheduleExact(context)) return false;
@@ -61,12 +104,12 @@ public final class WorkAlarmManager {
         Set<String> scheduled = new HashSet<>();
         for (int i = 0; i < DAYS_AHEAD; i++) {
             LocalDate date = today.plusDays(i);
-            if (!isWorkAlarmDay(prefs, date)) continue;
+            if (!isWorkAlarmDay(prefs, runtime, date)) continue;
             LocalDateTime when = LocalDateTime.of(date, alarmTime);
             if (!when.isAfter(LocalDateTime.now())) continue;
             if (scheduleDate(context, date, when)) scheduled.add(date.toString());
         }
-        prefs.edit().putStringSet(SCHEDULED_DATES_KEY, scheduled).apply();
+        runtime.edit().putStringSet(SCHEDULED_DATES_KEY, scheduled).apply();
         return true;
     }
 
@@ -141,6 +184,7 @@ public final class WorkAlarmManager {
     }
 
     public static void cancel(Context context) {
+        migrateLegacyRuntimeState(context);
         cancelScheduled(context);
         cancelSnooze(context);
         WorkAlarmReminderNotification.cancel(context);
@@ -158,6 +202,7 @@ public final class WorkAlarmManager {
 
     public static void cancelDate(Context context, String rawDate) {
         if (rawDate == null || rawDate.trim().isEmpty()) return;
+        migrateLegacyRuntimeState(context);
         try {
             LocalDate date = LocalDate.parse(rawDate.trim());
             AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
@@ -172,9 +217,9 @@ public final class WorkAlarmManager {
                         PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
                 if (reminder != null) { am.cancel(reminder); reminder.cancel(); }
             }
-            SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            Set<String> old = prefs.getStringSet(SCHEDULED_DATES_KEY, null);
-            SharedPreferences.Editor editor = prefs.edit()
+            SharedPreferences runtime = runtimePrefs(context);
+            Set<String> old = runtime.getStringSet(SCHEDULED_DATES_KEY, null);
+            SharedPreferences.Editor editor = runtime.edit()
                     .putBoolean(SKIP_ALARM_PREFIX + date, true);
             if (old != null) {
                 Set<String> updated = new HashSet<>(old);
@@ -186,8 +231,8 @@ public final class WorkAlarmManager {
     }
 
     private static void cancelScheduled(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        Set<String> old = prefs.getStringSet(SCHEDULED_DATES_KEY, null);
+        SharedPreferences runtime = runtimePrefs(context);
+        Set<String> old = runtime.getStringSet(SCHEDULED_DATES_KEY, null);
         if (old != null) {
             AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
             if (am != null) for (String raw : new HashSet<>(old)) {
@@ -205,12 +250,12 @@ public final class WorkAlarmManager {
                 } catch (Exception ignored) { }
             }
         }
-        prefs.edit().remove(SCHEDULED_DATES_KEY).apply();
+        runtime.edit().remove(SCHEDULED_DATES_KEY).apply();
     }
 
-    private static void cleanupExpiredSkipMarkers(SharedPreferences prefs, LocalDate today) {
+    private static void cleanupExpiredSkipMarkers(SharedPreferences runtime, LocalDate today) {
         SharedPreferences.Editor editor = null;
-        for (String key : new HashSet<>(prefs.getAll().keySet())) {
+        for (String key : new HashSet<>(runtime.getAll().keySet())) {
             if (!key.startsWith(SKIP_ALARM_PREFIX)) continue;
             boolean remove;
             try {
@@ -220,7 +265,7 @@ public final class WorkAlarmManager {
                 remove = true;
             }
             if (remove) {
-                if (editor == null) editor = prefs.edit();
+                if (editor == null) editor = runtime.edit();
                 editor.remove(key);
             }
         }
@@ -258,10 +303,13 @@ public final class WorkAlarmManager {
         return requestCode(d) + UPCOMING_REQUEST_OFFSET;
     }
 
-    private static boolean isWorkAlarmDay(SharedPreferences prefs, LocalDate date) {
+    private static boolean isWorkAlarmDay(
+            SharedPreferences prefs,
+            SharedPreferences runtime,
+            LocalDate date) {
         LocalDate workStart = parseDate(prefs.getString(WORK_START_DATE_KEY, ""));
         if (workStart != null && date.isBefore(workStart)) return false;
-        if (prefs.getBoolean(SKIP_ALARM_PREFIX + date, false)) return false;
+        if (runtime.getBoolean(SKIP_ALARM_PREFIX + date, false)) return false;
         if (HolidayCalendar.isHoliday(prefs, date)) return false;
         if (prefs.getBoolean(LEAVE_PREFIX + date, false)) return false;
         if (prefs.getBoolean(REST_PREFIX + date, false)) return false;
