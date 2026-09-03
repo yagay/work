@@ -23,7 +23,11 @@ public class WorkAlarmRescheduleReceiver extends BroadcastReceiver {
             WorkAlarmUpdateScheduler.cancel(context);
             return;
         }
-        WorkAlarmManager.forceSync(context);
+
+        boolean success = WorkAlarmManager.forceSync(context);
         WorkAlarmUpdateScheduler.schedule(context);
+        if (!success) {
+            WorkAlarmNotification.notifyRetryRequired(context);
+        }
     }
 }
