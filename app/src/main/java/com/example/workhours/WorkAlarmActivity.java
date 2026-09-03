@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -11,6 +12,7 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.window.OnBackInvokedDispatcher;
 
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -48,6 +50,7 @@ public class WorkAlarmActivity extends Activity {
         Button stop = new Button(this); stop.setText("停止闹钟"); UiStyle.button(this,stop,true); stop.setOnClickListener(v->doAction(WorkAlarmRingService.ACTION_STOP)); LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(-1,dp(58));xp.topMargin=dp(12);root.addView(stop,xp);
         setContentView(root);
         AppThemeManager.applySystemBars(this);
+        registerBackHandler();
     }
 
     private void doAction(String action) {
@@ -63,9 +66,28 @@ public class WorkAlarmActivity extends Activity {
         return false;
     }
 
+    private void handleBackAction() {
+        String action=getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(WorkAlarmOptions.BACK_ACTION_KEY, WorkAlarmOptions.DEFAULT_BACK_ACTION);
+        if ("stop".equals(action)) doAction(WorkAlarmRingService.ACTION_STOP);
+        else if ("snooze".equals(action)) doAction(WorkAlarmRingService.ACTION_SNOOZE);
+    }
+
+    private void registerBackHandler() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    this::handleBackAction);
+        }
+    }
+
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         if (event.getAction()==KeyEvent.ACTION_DOWN) {
             int k=event.getKeyCode();
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && k==KeyEvent.KEYCODE_BACK) {
+                handleBackAction();
+                return true;
+            }
             if (k==KeyEvent.KEYCODE_VOLUME_UP || k==KeyEvent.KEYCODE_VOLUME_DOWN || k==KeyEvent.KEYCODE_VOLUME_MUTE
                     || k==KeyEvent.KEYCODE_HEADSETHOOK || k==KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE
                     || k==KeyEvent.KEYCODE_MEDIA_STOP || k==KeyEvent.KEYCODE_MEDIA_NEXT || k==KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
@@ -75,10 +97,5 @@ public class WorkAlarmActivity extends Activity {
         return super.dispatchKeyEvent(event);
     }
 
-    @Override public void onBackPressed() {
-        String action=getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(WorkAlarmOptions.BACK_ACTION_KEY, WorkAlarmOptions.DEFAULT_BACK_ACTION);
-        if ("stop".equals(action)) doAction(WorkAlarmRingService.ACTION_STOP);
-        else if ("snooze".equals(action)) doAction(WorkAlarmRingService.ACTION_SNOOZE);
-    }
     private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }
