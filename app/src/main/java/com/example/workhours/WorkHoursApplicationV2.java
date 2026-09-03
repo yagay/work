@@ -1,23 +1,30 @@
 package com.example.workhours;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.Editable;
 import android.text.InputType;
+import android.text.TextWatcher;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Toast;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 
 import java.lang.reflect.Field;
 
 /**
- * Small application-level extension for alarm settings that should stay independent
- * from the already large SettingsActivity implementation.
+ * Keeps custom alarm minute values directly editable inside SettingsActivity.
+ * The original fixed-choice buttons are replaced in-place with numeric inputs.
  */
 public class WorkHoursApplicationV2 extends WorkHoursApplication {
     private static final String PREFS = "work_hours_prefs";
+    private static final String INLINE_TAG_PREFIX = "alarm_inline_minutes:";
+    private static final int MAX_MINUTES = 10080; // 7 days
 
     @Override
     public void onCreate() {
@@ -25,7 +32,19 @@ public class WorkHoursApplicationV2 extends WorkHoursApplication {
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks() {
             @Override
             public void onActivityResumed(Activity activity) {
-                if (activity instanceof SettingsActivity) installAlarmTimeEditors((SettingsActivity) activity);
+                if (activity instanceof SettingsActivity) {
+                    installAlarmMinuteEditors((SettingsActivity) activity);
+                }
+            }
+
+            @Override
+            public void onActivityPostCreated(Activity activity, Bundle savedInstanceState) {
+                if (activity instanceof SettingsActivity) {
+                    View root = activity.findViewById(android.R.id.content);
+                    if (root != null) {
+                        root.post(() -> installAlarmMinuteEditors((SettingsActivity) activity));
+                    }
+                }
             }
 
             @Override public void onActivityCreated(Activity activity, Bundle savedInstanceState) { }
@@ -37,81 +56,120 @@ public class WorkHoursApplicationV2 extends WorkHoursApplication {
         });
     }
 
-    private void installAlarmTimeEditors(SettingsActivity activity) {
-        bindEditor(activity, "autoStopButton", WorkAlarmOptions.AUTO_STOP_MINUTES_KEY,
-                WorkAlarmOptions.DEFAULT_AUTO_STOP_MINUTES, "自动停止", true);
-        bindEditor(activity, "snoozeMinutesButton", WorkAlarmOptions.SNOOZE_MINUTES_KEY,
-                WorkAlarmOptions.DEFAULT_SNOOZE_MINUTES, "稍后提醒间隔", false);
+    private void installAlarmMinuteEditors(SettingsActivity activity) {
+        replaceButtonWithInlineInput(
+                activity,
+                "autoStopButton",
+                WorkAlarmOptions.AUTO_STOP_MINUTES_KEY,
+                WorkAlarmOptions.DEFAULT_AUTO_STOP_MINUTES,
+                true);
+
+        replaceButtonWithInlineInput(
+                activity,
+                "snoozeMinutesButton",
+                WorkAlarmOptions.SNOOZE_MINUTES_KEY,
+                WorkAlarmOptions.DEFAULT_SNOOZE_MINUTES,
+                false);
     }
 
-    private void bindEditor(SettingsActivity activity, String fieldName, String prefKey,
-                            int defaultValue, String title, boolean allowZero) {
+    private void replaceButtonWithInlineInput(
+            SettingsActivity activity,
+            String fieldName,
+            String prefKey,
+            int defaultValue,
+            boolean allowZero) {
         try {
             Field field = SettingsActivity.class.getDeclaredField(fieldName);
             field.setAccessible(true);
             Object value = field.get(activity);
             if (!(value instanceof Button)) return;
-            Button button = (Button) value;
-            button.setOnClickListener(v -> showMinuteInput(activity, button, prefKey,
-                    defaultValue, title, allowZero));
+
+            Button oldButton = (Button) value;
+            if (!(oldButton.getParent() instanceof ViewGroup)) return;
+            ViewGroup parent = (ViewGroup) oldButton.getParent();
+
+            String tag = INLINE_TAG_PREFIX + prefKey;
+            for (int i = 0; i < parent.getChildCount(); i++) {
+                if (tag.equals(parent.getChildAt(i).getTag())) return;
+            }
+
+            int index = parent.indexOfChild(oldButton);
+            if (index < 0) return;
+            ViewGroup.LayoutParams oldParams = oldButton.getLayoutParams();
+
+            SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            int minimum = allowZero ? 0 : 1;
+            int saved = prefs.getInt(prefKey, defaultValue);
+            if (saved < minimum || saved > MAX_MINUTES) saved = defaultValue;
+
+            LinearLayout holder = new LinearLayout(activity);
+            holder.setTag(tag);
+            holder.setOrientation(LinearLayout.HORIZONTAL);
+            holder.setGravity(Gravity.CENTER_VERTICAL | Gravity.END);
+
+            EditText input = new EditText(activity);
+            input.setSingleLine(true);
+            input.setText(String.valueOf(saved));
+            input.setSelectAllOnFocus(true);
+            input.setTextSize(14);
+            input.setGravity(Gravity.CENTER);
+            input.setInputType(InputType.TYPE_CLASS_NUMBER);
+            input.setContentDescription(allowZero
+                    ? "自动停止分钟数，0 表示不自动停止"
+                    : "稍后提醒间隔分钟数");
+
+            LinearLayout.LayoutParams inputParams =
+                    new LinearLayout.LayoutParams(dp(activity, 86), dp(activity, 42));
+            holder.addView(input, inputParams);
+
+            TextView unit = new TextView(activity);
+            unit.setText(" 分钟");
+            unit.setTextSize(14);
+            unit.setGravity(Gravity.CENTER_VERTICAL);
+            holder.addView(unit, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.MATCH_PARENT));
+
+            parent.removeViewAt(index);
+            parent.addView(holder, index, oldParams);
+
+            final int fallbackDefault = defaultValue;
+            final int minValue = minimum;
+
+            input.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+
+                @Override
+                public void afterTextChanged(Editable editable) {
+                    String raw = editable == null ? "" : editable.toString().trim();
+                    if (raw.isEmpty()) return;
+                    try {
+                        int minutes = Integer.parseInt(raw);
+                        if (minutes < minValue || minutes > MAX_MINUTES) return;
+                        prefs.edit().putInt(prefKey, minutes).apply();
+                    } catch (NumberFormatException ignored) { }
+                }
+            });
+
+            input.setOnFocusChangeListener((v, hasFocus) -> {
+                if (hasFocus) return;
+                String raw = input.getText() == null ? "" : input.getText().toString().trim();
+                int fallback = prefs.getInt(prefKey, fallbackDefault);
+                if (fallback < minValue || fallback > MAX_MINUTES) fallback = fallbackDefault;
+                try {
+                    int minutes = Integer.parseInt(raw);
+                    if (minutes < minValue || minutes > MAX_MINUTES) {
+                        input.setText(String.valueOf(fallback));
+                    }
+                } catch (NumberFormatException e) {
+                    input.setText(String.valueOf(fallback));
+                }
+            });
         } catch (Exception ignored) { }
     }
 
-    private void showMinuteInput(Activity activity, Button button, String prefKey,
-                                 int defaultValue, String title, boolean allowZero) {
-        SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        int current = prefs.getInt(prefKey, defaultValue);
-
-        EditText input = new EditText(activity);
-        input.setSingleLine(true);
-        input.setInputType(InputType.TYPE_CLASS_NUMBER);
-        input.setText(String.valueOf(current));
-        input.setSelection(input.length());
-        int pad = Math.round(20 * activity.getResources().getDisplayMetrics().density);
-        input.setPadding(pad, 0, pad, 0);
-
-        String message = allowZero
-                ? "输入分钟数。0 表示不自动停止。"
-                : "输入稍后再次提醒的间隔分钟数，必须大于 0。";
-
-        AlertDialog dialog = new AlertDialog.Builder(activity)
-                .setTitle(title)
-                .setMessage(message)
-                .setView(input)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", null)
-                .create();
-
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(v -> {
-                    String raw = input.getText() == null ? "" : input.getText().toString().trim();
-                    int minutes;
-                    try {
-                        minutes = Integer.parseInt(raw);
-                    } catch (NumberFormatException e) {
-                        Toast.makeText(activity, "请输入有效的分钟数", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if ((!allowZero && minutes <= 0) || (allowZero && minutes < 0)) {
-                        Toast.makeText(activity,
-                                allowZero ? "分钟数不能小于 0" : "提醒间隔必须大于 0 分钟",
-                                Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (minutes > 10080) {
-                        Toast.makeText(activity, "最多可设置 10080 分钟（7 天）", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-
-                    prefs.edit().putInt(prefKey, minutes).apply();
-                    button.setText(formatMinutes(minutes, allowZero));
-                    dialog.dismiss();
-                }));
-        dialog.show();
-    }
-
-    private String formatMinutes(int minutes, boolean allowZero) {
-        if (allowZero && minutes == 0) return "不自动停止";
-        return minutes + " 分钟";
+    private int dp(Context context, int value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
     }
 }
