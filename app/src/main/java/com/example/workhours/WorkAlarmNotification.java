@@ -14,26 +14,21 @@ import android.os.Build;
 public final class WorkAlarmNotification {
     private static final String CHANNEL_ID = "work_alarm_sync";
     private static final int NOTIFICATION_ID = 7201;
-    private static final int REQUEST_NOTIFICATION_PERMISSION = 7202;
 
     private WorkAlarmNotification() { }
 
     public static void requestPermissionIfNeeded(Activity activity) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-            activity.requestPermissions(
-                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                    REQUEST_NOTIFICATION_PERMISSION);
-        }
+        WorkAlarmPermissionActivity.request(activity);
+    }
+
+    public static boolean canPostNotifications(Context context) {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
+                == PackageManager.PERMISSION_GRANTED;
     }
 
     public static void notifyRetryRequired(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
+        if (!canPostNotifications(context)) return;
 
         NotificationManager manager =
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -69,11 +64,7 @@ public final class WorkAlarmNotification {
     }
 
     public static void notifySyncResult(Context context, boolean success, boolean automatic) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-                && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
+        if (!canPostNotifications(context)) return;
 
         NotificationManager manager =
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
