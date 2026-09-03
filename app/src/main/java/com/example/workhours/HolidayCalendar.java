@@ -7,7 +7,6 @@ import org.json.JSONObject;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.Month;
 import java.time.temporal.TemporalAdjusters;
 import java.util.HashSet;
 import java.util.Set;
@@ -97,8 +96,7 @@ public final class HolidayCalendar {
         if(date.equals(LocalDate.of(y,5,1).with(TemporalAdjusters.firstInMonth(DayOfWeek.MONDAY)))) return "五月初银行假日";
         if(date.equals(LocalDate.of(y,5,31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))) return "春季银行假日";
         if(date.equals(LocalDate.of(y,8,31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))) return "夏季银行假日";
-        String christmas = christmasPair(date, y);
-        return christmas;
+        return christmasPair(date, y);
     }
 
     private static String scotland(LocalDate date) {
@@ -127,6 +125,9 @@ public final class HolidayCalendar {
     private static String unitedStates(LocalDate date) {
         int y=date.getYear();
         if(date.equals(usObserved(LocalDate.of(y,1,1)))) return "元旦";
+        // A Saturday Jan 1 is federally observed on the previous Dec 31.
+        // Check next year's New Year as well so the cross-year observed day is not missed.
+        if(date.equals(usObserved(LocalDate.of(y+1,1,1)))) return "元旦";
         if(date.equals(nthWeekday(y,1,DayOfWeek.MONDAY,3))) return "马丁·路德·金纪念日";
         if(date.equals(nthWeekday(y,2,DayOfWeek.MONDAY,3))) return "华盛顿诞辰纪念日";
         if(date.equals(LocalDate.of(y,5,31).with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY)))) return "阵亡将士纪念日";
