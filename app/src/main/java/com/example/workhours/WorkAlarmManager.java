@@ -7,11 +7,8 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.net.Uri;
 import android.os.Build;
-import android.provider.Settings;
 
-import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -146,19 +143,11 @@ public final class WorkAlarmManager {
     }
 
     public static void requestAlarmPermissions(Activity activity) {
-        if (Build.VERSION.SDK_INT >= 31 && !canScheduleExact(activity)) {
-            try {
-                activity.startActivity(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
-                        Uri.parse("package:" + activity.getPackageName())));
-                return;
-            } catch (Exception ignored) { }
-        }
-        if (Build.VERSION.SDK_INT >= 34 && !canUseFullScreen(activity)) {
-            try {
-                activity.startActivity(new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
-                        Uri.parse("package:" + activity.getPackageName())));
-            } catch (Exception ignored) { }
-        }
+        // A single coordinator serializes notification, exact-alarm and full-screen
+        // special access. This avoids opening two Settings screens at once and fixes
+        // the old case where returning from exact-alarm settings never continued to
+        // the full-screen-intent permission.
+        WorkAlarmPermissionActivity.request(activity);
     }
 
     private static LocalTime configuredAlarmTime(SharedPreferences prefs) {
