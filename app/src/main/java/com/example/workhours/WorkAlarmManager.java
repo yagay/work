@@ -35,6 +35,8 @@ public final class WorkAlarmManager {
     private static final String SCHEDULED_DATES_KEY = "work_alarm_scheduled_dates";
     private static final int DAYS_AHEAD = 21;
     private static final int SNOOZE_REQUEST_CODE = 1909010;
+    private static final int UPCOMING_REQUEST_OFFSET = 40000000;
+    private static final int UPCOMING_LEAD_MINUTES = 30;
 
     private WorkAlarmManager() { }
 
@@ -80,10 +82,33 @@ public final class WorkAlarmManager {
         long triggerAt = when.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
         try {
             am.setAlarmClock(new AlarmManager.AlarmClockInfo(triggerAt, showIntent), operation);
+            scheduleUpcomingNotification(context, date, triggerAt);
             return true;
         } catch (SecurityException e) {
             return false;
         }
+    }
+
+    private static void scheduleUpcomingNotification(Context context, LocalDate date, long triggerAt) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        long reminderAt = triggerAt - UPCOMING_LEAD_MINUTES * 60_000L;
+        if (reminderAt <= System.currentTimeMillis()) {
+            WorkAlarmReminderNotification.showUpcoming(context, date.toString(), triggerAt);
+            return;
+        }
+        Intent reminder = new Intent(context, WorkAlarmReminderReceiver.class)
+                .setAction(WorkAlarmReminderReceiver.ACTION_SHOW_UPCOMING)
+                .putExtra(WorkAlarmReminderReceiver.EXTRA_ALARM_DATE, date.toString())
+                .putExtra(WorkAlarmReminderReceiver.EXTRA_TRIGGER_AT, triggerAt);
+        PendingIntent pi = PendingIntent.getBroadcast(
+                context,
+                upcomingRequestCode(date),
+                reminder,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminderAt, pi);
+        } catch (SecurityException ignored) { }
     }
 
     public static void scheduleSnooze(Context context, int minutes, int snoozeCount) {
@@ -99,11 +124,17 @@ public final class WorkAlarmManager {
         long triggerAt = System.currentTimeMillis() + minutes * 60_000L;
         try {
             am.setAlarmClock(new AlarmManager.AlarmClockInfo(triggerAt, operation), operation);
+            WorkAlarmReminderNotification.showSnoozed(context, minutes, snoozeCount, triggerAt);
         } catch (SecurityException ignored) { }
     }
 
     public static void cancel(Context context) {
         cancelScheduled(context);
+        cancelSnooze(context);
+        WorkAlarmReminderNotification.cancel(context);
+    }
+
+    public static void cancelSnooze(Context context) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am != null) {
             PendingIntent snooze = PendingIntent.getBroadcast(context, SNOOZE_REQUEST_CODE,
@@ -111,6 +142,32 @@ public final class WorkAlarmManager {
                     PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
             if (snooze != null) { am.cancel(snooze); snooze.cancel(); }
         }
+    }
+
+    public static void cancelDate(Context context, String rawDate) {
+        if (rawDate == null || rawDate.trim().isEmpty()) return;
+        try {
+            LocalDate date = LocalDate.parse(rawDate.trim());
+            AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (am != null) {
+                PendingIntent fire = PendingIntent.getBroadcast(context, requestCode(date),
+                        new Intent(context, WorkAlarmReceiver.class).setAction(WorkAlarmReceiver.ACTION_FIRE),
+                        PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
+                if (fire != null) { am.cancel(fire); fire.cancel(); }
+                PendingIntent reminder = PendingIntent.getBroadcast(context, upcomingRequestCode(date),
+                        new Intent(context, WorkAlarmReminderReceiver.class)
+                                .setAction(WorkAlarmReminderReceiver.ACTION_SHOW_UPCOMING),
+                        PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
+                if (reminder != null) { am.cancel(reminder); reminder.cancel(); }
+            }
+            SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            Set<String> old = prefs.getStringSet(SCHEDULED_DATES_KEY, null);
+            if (old != null) {
+                Set<String> updated = new HashSet<>(old);
+                updated.remove(date.toString());
+                prefs.edit().putStringSet(SCHEDULED_DATES_KEY, updated).apply();
+            }
+        } catch (Exception ignored) { }
     }
 
     private static void cancelScheduled(Context context) {
@@ -125,6 +182,11 @@ public final class WorkAlarmManager {
                             new Intent(context, WorkAlarmReceiver.class).setAction(WorkAlarmReceiver.ACTION_FIRE),
                             PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
                     if (pi != null) { am.cancel(pi); pi.cancel(); }
+                    PendingIntent reminder = PendingIntent.getBroadcast(context, upcomingRequestCode(d),
+                            new Intent(context, WorkAlarmReminderReceiver.class)
+                                    .setAction(WorkAlarmReminderReceiver.ACTION_SHOW_UPCOMING),
+                            PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE);
+                    if (reminder != null) { am.cancel(reminder); reminder.cancel(); }
                 } catch (Exception ignored) { }
             }
         }
@@ -143,10 +205,6 @@ public final class WorkAlarmManager {
     }
 
     public static void requestAlarmPermissions(Activity activity) {
-        // A single coordinator serializes notification, exact-alarm and full-screen
-        // special access. This avoids opening two Settings screens at once and fixes
-        // the old case where returning from exact-alarm settings never continued to
-        // the full-screen-intent permission.
         WorkAlarmPermissionActivity.request(activity);
     }
 
@@ -160,6 +218,10 @@ public final class WorkAlarmManager {
 
     private static int requestCode(LocalDate d) {
         return d.getYear() * 10000 + d.getMonthValue() * 100 + d.getDayOfMonth();
+    }
+
+    private static int upcomingRequestCode(LocalDate d) {
+        return requestCode(d) + UPCOMING_REQUEST_OFFSET;
     }
 
     private static boolean isWorkAlarmDay(SharedPreferences prefs, LocalDate date) {
