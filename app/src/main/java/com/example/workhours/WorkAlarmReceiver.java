@@ -9,6 +9,8 @@ public class WorkAlarmReceiver extends BroadcastReceiver {
     public static final String ACTION_FIRE = "com.example.workhours.WORK_ALARM_FIRE";
 
     @Override public void onReceive(Context context, Intent intent) {
+        WorkAlarmReminderNotification.cancel(context);
+
         int snoozeCount = intent == null ? 0
                 : intent.getIntExtra(WorkAlarmRingService.EXTRA_SNOOZE_COUNT, 0);
 
