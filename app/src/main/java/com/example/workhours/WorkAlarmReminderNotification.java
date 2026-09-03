@@ -28,6 +28,11 @@ public final class WorkAlarmReminderNotification {
 
     private static void show(Context context, String title, String text, String alarmDate,
                              long triggerAtMillis, boolean snooze) {
+        // Android 13+ cannot display this notification after the user revokes the
+        // notification permission. Treat that as a supported degraded state rather
+        // than relying on NotificationManager to silently reject the post.
+        if (!WorkAlarmNotification.canPostNotifications(context)) return;
+
         NotificationManager nm = context.getSystemService(NotificationManager.class);
         if (nm == null) return;
 
