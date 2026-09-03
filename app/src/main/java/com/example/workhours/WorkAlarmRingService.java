@@ -33,6 +33,14 @@ public class WorkAlarmRingService extends Service {
     private Vibrator vibrator;
     private int currentSnoozeCount;
 
+    public static Intent createAlarmScreenIntent(Context context, int snoozeCount) {
+        return new Intent(context, WorkAlarmActivity.class)
+                .putExtra(EXTRA_SNOOZE_COUNT, snoozeCount)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    }
+
     @Override public void onCreate() {
         super.onCreate();
         NotificationManager nm = getSystemService(NotificationManager.class);
@@ -55,7 +63,18 @@ public class WorkAlarmRingService extends Service {
         startForeground(NOTIFICATION_ID, buildNotification());
         startSoundAndVibration();
         scheduleAutoStop();
+
+        // Full-screen notifications are still the primary Android alarm mechanism,
+        // but some OEMs suppress them. Retry opening the dedicated alarm screen after
+        // the service has entered foreground so the user always has a visible stop UI.
+        handler.postDelayed(this::tryOpenAlarmScreen, 250L);
         return START_NOT_STICKY;
+    }
+
+    private void tryOpenAlarmScreen() {
+        try {
+            startActivity(createAlarmScreenIntent(this, currentSnoozeCount));
+        } catch (Exception ignored) { }
     }
 
     private SharedPreferences prefs() { return getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
@@ -65,9 +84,7 @@ public class WorkAlarmRingService extends Service {
         int snoozeMinutes = p.getInt(WorkAlarmOptions.SNOOZE_MINUTES_KEY, WorkAlarmOptions.DEFAULT_SNOOZE_MINUTES);
         boolean canSnooze = p.getBoolean(WorkAlarmOptions.SNOOZE_ENABLED_KEY, WorkAlarmOptions.DEFAULT_SNOOZE_ENABLED)
                 && currentSnoozeCount < p.getInt(WorkAlarmOptions.SNOOZE_MAX_KEY, WorkAlarmOptions.DEFAULT_SNOOZE_MAX);
-        Intent screen = new Intent(this, WorkAlarmActivity.class)
-                .putExtra(EXTRA_SNOOZE_COUNT, currentSnoozeCount)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        Intent screen = createAlarmScreenIntent(this, currentSnoozeCount);
         PendingIntent full = PendingIntent.getActivity(this, 7302, screen,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         PendingIntent stop = PendingIntent.getService(this, 7303,
