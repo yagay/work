@@ -29,11 +29,6 @@ jobs:
         with:
           gradle-version: '9.4.1'
 
-      - name: Fix Android view imports for build
-        run: |
-          sed -i 's/import android\.app\.ActionMode;/import android.view.ActionMode;/' app/src/main/java/com/example/workhours/WorkHoursApplication.java
-          sed -i 's/import android\.app\.SearchEvent;/import android.view.SearchEvent;/' app/src/main/java/com/example/workhours/WorkHoursApplication.java
-
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
