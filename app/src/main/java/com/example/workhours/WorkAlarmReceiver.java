@@ -18,15 +18,5 @@ public class WorkAlarmReceiver extends BroadcastReceiver {
                 .putExtra(WorkAlarmRingService.EXTRA_SNOOZE_COUNT, snoozeCount);
         if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(service);
         else context.startService(service);
-
-        // Do not rely only on Notification#setFullScreenIntent(). OEMs and newer
-        // Android versions may suppress it even though the alarm sound starts.
-        // An exact alarm broadcast is the best moment to also request the alarm UI.
-        try {
-            Intent screen = WorkAlarmRingService.createAlarmScreenIntent(context, snoozeCount);
-            context.startActivity(screen);
-        } catch (Exception ignored) {
-            // The foreground alarm notification remains the fallback entry point.
-        }
     }
 }
