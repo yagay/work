@@ -34,14 +34,12 @@ public final class WorkAlarmNotification {
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "上班闹钟同步",
-                    NotificationManager.IMPORTANCE_DEFAULT);
-            channel.setDescription("后台自动同步失败时提醒点击完成同步");
-            manager.createNotificationChannel(channel);
-        }
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "上班闹钟同步",
+                NotificationManager.IMPORTANCE_DEFAULT);
+        channel.setDescription("后台自动同步失败时提醒点击完成同步");
+        manager.createNotificationChannel(channel);
 
         Intent retry = new Intent(context, WorkAlarmRetryActivity.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -49,9 +47,7 @@ public final class WorkAlarmNotification {
                 context, 7203, retry,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? new Notification.Builder(context, CHANNEL_ID)
-                : new Notification.Builder(context);
+        Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID);
         builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle("下周闹钟需要确认同步")
                 .setContentText("后台自动同步被系统阻止，点一下完成同步。")
@@ -70,14 +66,12 @@ public final class WorkAlarmNotification {
                 (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID,
-                    "上班闹钟同步",
-                    NotificationManager.IMPORTANCE_DEFAULT);
-            channel.setDescription("通知系统闹钟自动更新是否成功");
-            manager.createNotificationChannel(channel);
-        }
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID,
+                "上班闹钟同步",
+                NotificationManager.IMPORTANCE_DEFAULT);
+        channel.setDescription("通知系统闹钟自动更新是否成功");
+        manager.createNotificationChannel(channel);
 
         String title;
         String text;
@@ -99,9 +93,7 @@ public final class WorkAlarmNotification {
                 context, 0, openApp,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? new Notification.Builder(context, CHANNEL_ID)
-                : new Notification.Builder(context);
+        Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID);
         builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle(title)
                 .setContentText(text)
