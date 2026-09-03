@@ -32,9 +32,11 @@ public final class WorkAlarmManager {
     private static final String LEAVE_PREFIX = "leave_";
     private static final String REST_PREFIX = "rest_";
     private static final String OVERRIDE_PREFIX = "hours_";
+    private static final String SKIP_ALARM_PREFIX = "work_alarm_skip_";
     private static final String SCHEDULED_DATES_KEY = "work_alarm_scheduled_dates";
     private static final int DAYS_AHEAD = 21;
     private static final int SNOOZE_REQUEST_CODE = 1909010;
+    private static final int SNOOZE_SHOW_REQUEST_CODE = 1909011;
     private static final int UPCOMING_REQUEST_OFFSET = 40000000;
     private static final int UPCOMING_LEAD_MINUTES = 30;
 
@@ -121,9 +123,18 @@ public final class WorkAlarmManager {
                 .putExtra(WorkAlarmRingService.EXTRA_SNOOZE_COUNT, snoozeCount);
         PendingIntent operation = PendingIntent.getBroadcast(context, SNOOZE_REQUEST_CODE, fire,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Intent show = new Intent(context, MainActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent showIntent = PendingIntent.getActivity(
+                context,
+                SNOOZE_SHOW_REQUEST_CODE,
+                show,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         long triggerAt = System.currentTimeMillis() + minutes * 60_000L;
         try {
-            am.setAlarmClock(new AlarmManager.AlarmClockInfo(triggerAt, operation), operation);
+            am.setAlarmClock(new AlarmManager.AlarmClockInfo(triggerAt, showIntent), operation);
             WorkAlarmReminderNotification.showSnoozed(context, minutes, snoozeCount, triggerAt);
         } catch (SecurityException ignored) { }
     }
@@ -162,11 +173,14 @@ public final class WorkAlarmManager {
             }
             SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             Set<String> old = prefs.getStringSet(SCHEDULED_DATES_KEY, null);
+            SharedPreferences.Editor editor = prefs.edit()
+                    .putBoolean(SKIP_ALARM_PREFIX + date, true);
             if (old != null) {
                 Set<String> updated = new HashSet<>(old);
                 updated.remove(date.toString());
-                prefs.edit().putStringSet(SCHEDULED_DATES_KEY, updated).apply();
+                editor.putStringSet(SCHEDULED_DATES_KEY, updated);
             }
+            editor.apply();
         } catch (Exception ignored) { }
     }
 
@@ -227,6 +241,7 @@ public final class WorkAlarmManager {
     private static boolean isWorkAlarmDay(SharedPreferences prefs, LocalDate date) {
         LocalDate workStart = parseDate(prefs.getString(WORK_START_DATE_KEY, ""));
         if (workStart != null && date.isBefore(workStart)) return false;
+        if (prefs.getBoolean(SKIP_ALARM_PREFIX + date, false)) return false;
         if (HolidayCalendar.isHoliday(prefs, date)) return false;
         if (prefs.getBoolean(LEAVE_PREFIX + date, false)) return false;
         if (prefs.getBoolean(REST_PREFIX + date, false)) return false;
