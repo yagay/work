@@ -5,6 +5,8 @@ import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -22,10 +24,35 @@ import android.widget.TextView;
 public class EnhancedWorkHoursApplication extends WorkHoursApplication {
     private static final String PREFS = "work_hours_prefs";
     private static final int TAG_INLINE_ALARM_MINUTES = 0x7f0a0010;
+    private static final long ALARM_RESYNC_DEBOUNCE_MS = 500L;
+
+    private final Handler alarmSyncHandler = new Handler(Looper.getMainLooper());
+    private SharedPreferences alarmObservedPrefs;
+    private final Runnable alarmResync = () -> {
+        SharedPreferences prefs = alarmObservedPrefs;
+        if (prefs == null) return;
+        if (prefs.getBoolean(WorkAlarmManager.ENABLED_KEY, false)) {
+            WorkAlarmUpdateScheduler.schedule(this);
+            WorkAlarmManager.forceSync(this);
+        } else {
+            WorkAlarmManager.cancel(this);
+            WorkAlarmUpdateScheduler.cancel(this);
+        }
+    };
+
+    private final SharedPreferences.OnSharedPreferenceChangeListener alarmPreferenceListener =
+            (sharedPreferences, key) -> {
+                if (key != null && !affectsAlarmSchedule(key)) return;
+                alarmSyncHandler.removeCallbacks(alarmResync);
+                alarmSyncHandler.postDelayed(alarmResync, ALARM_RESYNC_DEBOUNCE_MS);
+            };
 
     @Override
     public void onCreate() {
         super.onCreate();
+        alarmObservedPrefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        alarmObservedPrefs.registerOnSharedPreferenceChangeListener(alarmPreferenceListener);
+
         registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
             @Override public void onActivityResumed(Activity activity) {
                 if (activity instanceof SettingsActivity) {
@@ -49,6 +76,25 @@ public class EnhancedWorkHoursApplication extends WorkHoursApplication {
             @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) { }
             @Override public void onActivityDestroyed(Activity activity) { }
         });
+    }
+
+    private static boolean affectsAlarmSchedule(String key) {
+        if (WorkAlarmManager.ENABLED_KEY.equals(key)
+                || WorkAlarmManager.FOLLOW_WORK_TIME_KEY.equals(key)
+                || WorkAlarmManager.ALARM_TIME_KEY.equals(key)
+                || WorkAlarmUpdateScheduler.UPDATE_TIME_KEY.equals(key)
+                || HolidayCalendar.HISTORY_KEY.equals(key)
+                || HolidayCalendar.REGION_KEY.equals(key)
+                || "start_time".equals(key)
+                || "work_start_date".equals(key)
+                || "monthly_rest_days".equals(key)
+                || "rest_rule_mode".equals(key)) {
+            return true;
+        }
+        return key.startsWith("day_")
+                || key.startsWith("leave_")
+                || key.startsWith("rest_")
+                || key.startsWith("hours_");
     }
 
     private static void installInlineAlarmMinuteInputs(Activity activity) {
