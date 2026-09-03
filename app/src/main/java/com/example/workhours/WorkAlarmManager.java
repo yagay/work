@@ -49,6 +49,8 @@ public final class WorkAlarmManager {
 
     private static boolean rebuild(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        LocalDate today = LocalDate.now();
+        cleanupExpiredSkipMarkers(prefs, today);
         cancelScheduled(context);
         if (!prefs.getBoolean(ENABLED_KEY, false)) return true;
         if (!canScheduleExact(context)) return false;
@@ -56,7 +58,6 @@ public final class WorkAlarmManager {
         LocalTime alarmTime = configuredAlarmTime(prefs);
         if (alarmTime == null) return false;
 
-        LocalDate today = LocalDate.now();
         Set<String> scheduled = new HashSet<>();
         for (int i = 0; i < DAYS_AHEAD; i++) {
             LocalDate date = today.plusDays(i);
@@ -205,6 +206,25 @@ public final class WorkAlarmManager {
             }
         }
         prefs.edit().remove(SCHEDULED_DATES_KEY).apply();
+    }
+
+    private static void cleanupExpiredSkipMarkers(SharedPreferences prefs, LocalDate today) {
+        SharedPreferences.Editor editor = null;
+        for (String key : new HashSet<>(prefs.getAll().keySet())) {
+            if (!key.startsWith(SKIP_ALARM_PREFIX)) continue;
+            boolean remove;
+            try {
+                String rawDate = key.substring(SKIP_ALARM_PREFIX.length());
+                remove = LocalDate.parse(rawDate).isBefore(today);
+            } catch (Exception e) {
+                remove = true;
+            }
+            if (remove) {
+                if (editor == null) editor = prefs.edit();
+                editor.remove(key);
+            }
+        }
+        if (editor != null) editor.apply();
     }
 
     public static boolean canScheduleExact(Context context) {
