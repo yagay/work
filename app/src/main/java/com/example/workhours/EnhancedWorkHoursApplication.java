@@ -85,6 +85,7 @@ public class EnhancedWorkHoursApplication extends WorkHoursApplication {
                 || WorkAlarmUpdateScheduler.UPDATE_TIME_KEY.equals(key)
                 || HolidayCalendar.HISTORY_KEY.equals(key)
                 || HolidayCalendar.REGION_KEY.equals(key)
+                || HolidayCalendar.CUSTOM_DATES_KEY.equals(key)
                 || "start_time".equals(key)
                 || "work_start_date".equals(key)
                 || "monthly_rest_days".equals(key)
