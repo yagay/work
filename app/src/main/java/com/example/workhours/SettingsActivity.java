@@ -89,7 +89,6 @@ public class SettingsActivity extends Activity {
     private String holidayRegion = HolidayCalendar.DEFAULT_REGION;
     private Button holidayRegionButton;
     private CheckBox publicHolidayPaidCheck;
-    private Button plannedHolidayButton;
     private LinearLayout holidayHistoryContainer;
     private LinearLayout alarmOptionsGroup;
     private TextView previewText;
@@ -351,26 +350,16 @@ public class SettingsActivity extends Activity {
         holidayRegionButton.setOnClickListener(v -> chooseHolidayRegion());
         holidaySection.addView(holidayRegionButton, new LinearLayout.LayoutParams(-1, dp(UI_ACTION_DP)));
 
+        LinearLayout holidayPayRow = settingInputRow("公共假日算一天工资", dp(52));
         publicHolidayPaidCheck = new CheckBox(this);
-        publicHolidayPaidCheck.setText("公共假日算一天工资");
-        publicHolidayPaidCheck.setTextSize(UI_LABEL_SP);
-        publicHolidayPaidCheck.setPadding(0, dp(6), 0, dp(4));
+        publicHolidayPaidCheck.setText("");
+        publicHolidayPaidCheck.setGravity(Gravity.CENTER);
         publicHolidayPaidCheck.setOnCheckedChangeListener((buttonView, isChecked) -> {
             if (loadingSettings) return;
             prefs.edit().putBoolean(HolidayCalendar.PAID_KEY, isChecked).apply();
         });
-        holidaySection.addView(publicHolidayPaidCheck);
-
-        TextView plannedHolidayTitle = text("预定假日", 14, true);
-        plannedHolidayTitle.setPadding(0, dp(10), 0, dp(5));
-        holidaySection.addView(plannedHolidayTitle);
-        TextView plannedHolidayInfo = text("可提前选择未来不上班的日期。一次可以多选多天，保存后会自动排除工时和上班闹钟。", UI_BODY_SP, false);
-        plannedHolidayInfo.setPadding(0, 0, 0, dp(7));
-        holidaySection.addView(plannedHolidayInfo);
-        plannedHolidayButton = new Button(this);
-        UiStyle.button(this, plannedHolidayButton, false);
-        plannedHolidayButton.setOnClickListener(v -> showPlannedHolidayPicker());
-        holidaySection.addView(plannedHolidayButton, new LinearLayout.LayoutParams(-1, dp(UI_ACTION_DP)));
+        holidayPayRow.addView(publicHolidayPaidCheck, compactInputParams(dp(52)));
+        holidaySection.addView(holidayPayRow);
 
         TextView holidayHistoryTitle = text("公共假日历史", 14, true);
         holidayHistoryTitle.setPadding(0, dp(10), 0, dp(5));
@@ -727,138 +716,6 @@ public class SettingsActivity extends Activity {
         JSONObject current = findWageRule(LocalDate.now(), readWageHistory());
         if (current != null) return "monthly".equals(current.optString("mode", "hourly"));
         return "monthly".equals(prefs.getString(WAGE_MODE_KEY, "hourly"));
-    }
-
-    private void updatePlannedHolidayButton() {
-        if (plannedHolidayButton == null) return;
-        int upcoming = 0;
-        LocalDate today = LocalDate.now();
-        for (LocalDate date : HolidayCalendar.getCustomHolidayDates(prefs)) {
-            if (!date.isBefore(today)) upcoming++;
-        }
-        plannedHolidayButton.setText(upcoming == 0
-                ? "选择未来预定假日（可多选）  ›"
-                : "已预定 " + upcoming + " 天（可多选修改）  ›");
-    }
-
-    private void showPlannedHolidayPicker() {
-        final java.util.TreeSet<LocalDate> selected =
-                new java.util.TreeSet<>(HolidayCalendar.getCustomHolidayDates(prefs));
-        final java.time.YearMonth[] month = { java.time.YearMonth.now() };
-
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(10), dp(4), dp(10), 0);
-
-        LinearLayout nav = new LinearLayout(this);
-        nav.setOrientation(LinearLayout.HORIZONTAL);
-        nav.setGravity(Gravity.CENTER_VERTICAL);
-        Button previous = new Button(this);
-        previous.setText("‹");
-        UiStyle.button(this, previous, false);
-        TextView monthTitle = text("", 16, true);
-        monthTitle.setGravity(Gravity.CENTER);
-        Button next = new Button(this);
-        next.setText("›");
-        UiStyle.button(this, next, false);
-        nav.addView(previous, new LinearLayout.LayoutParams(dp(56), dp(44)));
-        nav.addView(monthTitle, new LinearLayout.LayoutParams(0, dp(44), 1f));
-        nav.addView(next, new LinearLayout.LayoutParams(dp(56), dp(44)));
-        box.addView(nav);
-
-        TextView selectedInfo = text("", 13, false);
-        selectedInfo.setPadding(0, dp(5), 0, dp(7));
-        box.addView(selectedInfo);
-
-        GridLayout grid = new GridLayout(this);
-        grid.setColumnCount(7);
-        box.addView(grid, new LinearLayout.LayoutParams(-1, -2));
-
-        final Runnable[] rebuild = new Runnable[1];
-        rebuild[0] = () -> {
-            java.time.YearMonth shown = month[0];
-            monthTitle.setText(shown.getYear() + "年" + shown.getMonthValue() + "月");
-            int futureCount = 0;
-            LocalDate today = LocalDate.now();
-            for (LocalDate d : selected) if (!d.isBefore(today)) futureCount++;
-            selectedInfo.setText("已选择未来假日：" + futureCount + " 天（可跨月份继续选择）");
-            grid.removeAllViews();
-
-            String[] heads = {"一","二","三","四","五","六","日"};
-            for (int i = 0; i < 7; i++) {
-                TextView head = text(heads[i], 12, true);
-                head.setGravity(Gravity.CENTER);
-                if (i >= 5) head.setTextColor(UiStyle.WEEKEND_TEXT);
-                GridLayout.LayoutParams hp = new GridLayout.LayoutParams();
-                hp.width = 0;
-                hp.height = dp(30);
-                hp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-                grid.addView(head, hp);
-            }
-
-            int leading = shown.atDay(1).getDayOfWeek().getValue() - 1;
-            int totalCells = ((leading + shown.lengthOfMonth() + 6) / 7) * 7;
-            for (int cell = 0; cell < totalCells; cell++) {
-                int dayNumber = cell - leading + 1;
-                if (dayNumber < 1 || dayNumber > shown.lengthOfMonth()) {
-                    TextView blank = text("", 12, false);
-                    GridLayout.LayoutParams bp = new GridLayout.LayoutParams();
-                    bp.width = 0;
-                    bp.height = dp(42);
-                    bp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-                    grid.addView(blank, bp);
-                    continue;
-                }
-
-                LocalDate date = shown.atDay(dayNumber);
-                boolean checked = selected.contains(date);
-                Button day = new Button(this);
-                day.setText(String.valueOf(dayNumber));
-                day.setTextSize(12);
-                day.setAllCaps(false);
-                day.setMinWidth(0);
-                day.setMinHeight(0);
-                day.setPadding(0, 0, 0, 0);
-                UiStyle.button(this, day, checked);
-                boolean canEdit = !date.isBefore(today) || checked;
-                day.setEnabled(canEdit);
-                if (canEdit) {
-                    day.setOnClickListener(v -> {
-                        if (!selected.remove(date)) selected.add(date);
-                        rebuild[0].run();
-                    });
-                }
-                GridLayout.LayoutParams dpv = new GridLayout.LayoutParams();
-                dpv.width = 0;
-                dpv.height = dp(42);
-                dpv.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
-                grid.addView(day, dpv);
-            }
-        };
-
-        previous.setOnClickListener(v -> {
-            month[0] = month[0].minusMonths(1);
-            rebuild[0].run();
-        });
-        next.setOnClickListener(v -> {
-            month[0] = month[0].plusMonths(1);
-            rebuild[0].run();
-        });
-        rebuild[0].run();
-
-        new AlertDialog.Builder(this)
-                .setTitle("批量选择预定假日")
-                .setView(box)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("保存", (dialog, which) -> {
-                    Set<String> values = new LinkedHashSet<>();
-                    for (LocalDate date : selected) values.add(date.toString());
-                    prefs.edit().putStringSet(HolidayCalendar.CUSTOM_DATES_KEY, values).apply();
-                    updatePlannedHolidayButton();
-                    WorkAlarmManager.forceSync(this);
-                    Toast.makeText(this, "已保存 " + values.size() + " 个预定假日", Toast.LENGTH_SHORT).show();
-                })
-                .show();
     }
 
     private JSONArray readHolidayHistory() {
@@ -1337,7 +1194,6 @@ public class SettingsActivity extends Activity {
                 ? android.view.View.VISIBLE : android.view.View.GONE);
         updateMonthlyRestButton();
         updateHolidayRegionButton();
-        updatePlannedHolidayButton();
         refreshHolidayHistoryUi();
         setRestRuleMode(restRuleMode);
         rebuildMonthlyRestCalendar();
