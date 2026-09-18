@@ -61,10 +61,10 @@ public class MainActivity extends Activity {
     private LocalDate rangeStart, rangeEnd;
     private TextView monthTitle, totalHoursText, totalWageText, statusStatsText;
     private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
-    private Button holidaySelectButton, holidaySaveButton, holidayCancelButton;
+    private Button multiEditButton, multiCancelButton;
     private GridLayout calendarGrid;
-    private LinearLayout holidaySelectionActions;
-    private TextView calendarHint, holidaySelectionInfo;
+    private LinearLayout multiSelectionActions;
+    private TextView calendarHint, multiSelectionInfo;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
     private LinearLayout monthSectionContainer, weekSectionContainer, rangeSectionContainer;
     private LinearLayout workContent, wageContent;
@@ -76,9 +76,8 @@ public class MainActivity extends Activity {
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
     private Button rangeStartButton, rangeEndButton;
     private boolean showingWageStats = false;
-    private boolean holidaySelectionMode = false;
-    private Set<LocalDate> pendingHolidayDates = new HashSet<>();
-    private YearMonth monthBeforeHolidaySelection;
+    private boolean multiSelectionMode = false;
+    private Set<LocalDate> selectedDates = new HashSet<>();
     private boolean appliedDarkTheme;
 
     @Override
@@ -258,50 +257,40 @@ public class MainActivity extends Activity {
     }
 
     private void buildSharedCalendar(LinearLayout root) {
-        LinearLayout titleRow = horizontal();
-        titleRow.setGravity(Gravity.CENTER_VERTICAL);
-        LinearLayout.LayoutParams titleRowParams = new LinearLayout.LayoutParams(-1, dp(48));
-        titleRowParams.topMargin = dp(12);
-        root.addView(titleRow, titleRowParams);
-
         TextView title = text("月历", 19, true);
-        titleRow.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        title.setPadding(0, dp(18), 0, dp(8));
+        root.addView(title);
 
-        holidaySelectButton = button("预定假期");
-        holidaySelectButton.setTextSize(13);
-        holidaySelectButton.setOnClickListener(v -> enterHolidaySelectionMode());
-        titleRow.addView(holidaySelectButton, new LinearLayout.LayoutParams(dp(108), dp(42)));
-
-        holidaySelectionActions = horizontal();
-        holidaySelectionActions.setGravity(Gravity.CENTER_VERTICAL);
-        holidaySelectionActions.setVisibility(View.GONE);
+        multiSelectionActions = horizontal();
+        multiSelectionActions.setGravity(Gravity.CENTER_VERTICAL);
+        multiSelectionActions.setVisibility(View.GONE);
         LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(-1, dp(48));
         actionParams.bottomMargin = dp(5);
-        root.addView(holidaySelectionActions, actionParams);
+        root.addView(multiSelectionActions, actionParams);
 
-        holidaySelectionInfo = text("", 13, true);
-        holidaySelectionActions.addView(holidaySelectionInfo, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        multiSelectionInfo = text("", 13, true);
+        multiSelectionActions.addView(multiSelectionInfo, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
-        holidayCancelButton = button("取消");
-        holidayCancelButton.setOnClickListener(v -> cancelHolidaySelection());
-        holidaySelectionActions.addView(holidayCancelButton, new LinearLayout.LayoutParams(dp(78), dp(42)));
+        multiCancelButton = button("取消");
+        multiCancelButton.setOnClickListener(v -> cancelMultiSelection());
+        multiSelectionActions.addView(multiCancelButton, new LinearLayout.LayoutParams(dp(78), dp(42)));
 
-        holidaySaveButton = button("保存");
-        UiStyle.button(this, holidaySaveButton, true);
-        holidaySaveButton.setOnClickListener(v -> saveHolidaySelection());
-        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(dp(78), dp(42));
-        saveParams.leftMargin = dp(6);
-        holidaySelectionActions.addView(holidaySaveButton, saveParams);
+        multiEditButton = button("编辑");
+        UiStyle.button(this, multiEditButton, true);
+        multiEditButton.setOnClickListener(v -> showBatchEditDialog());
+        LinearLayout.LayoutParams editParams = new LinearLayout.LayoutParams(dp(78), dp(42));
+        editParams.leftMargin = dp(6);
+        multiSelectionActions.addView(multiEditButton, editParams);
 
         calendarGrid = new GridLayout(this);
         calendarGrid.setColumnCount(7);
         calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
         root.addView(calendarGrid);
 
-        calendarHint = text("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录。", 13, false);
+        calendarHint = text("点击日期可编辑当天；长按任意可编辑日期可进入多选，再批量设置请假、休息或恢复自动。", 13, false);
         calendarHint.setPadding(0, dp(8), 0, dp(4));
         root.addView(calendarHint);
-        updateHolidaySelectionUi();
+        updateMultiSelectionUi();
     }
 
     private void rebuildSharedCalendar(LocalDate today) {
@@ -332,10 +321,8 @@ public class MainActivity extends Activity {
             boolean future = d.isAfter(today);
             boolean before = ws != null && d.isBefore(ws);
             boolean weekend = d.getDayOfWeek() == DayOfWeek.SATURDAY || d.getDayOfWeek() == DayOfWeek.SUNDAY;
-            boolean publicHoliday = !before && HolidayCalendar.isPublicHoliday(prefs, d);
-            boolean savedCustomHoliday = !before && HolidayCalendar.isCustomHoliday(prefs, d);
-            boolean selectedCustomHoliday = holidaySelectionMode ? pendingHolidayDates.contains(d) : savedCustomHoliday;
-            boolean holiday = publicHoliday || selectedCustomHoliday;
+            boolean holiday = !before && HolidayCalendar.isPublicHoliday(prefs, d);
+            boolean selected = multiSelectionMode && selectedDates.contains(d);
             boolean leave = !holiday && !before && isLeave(d);
             boolean manualRest = !holiday && !leave && !before && isManualRest(d);
             boolean configured = !before && isConfiguredWorkDay(d) && !holiday;
@@ -351,8 +338,8 @@ public class MainActivity extends Activity {
             cell.setGravity(Gravity.CENTER);
             cell.setPadding(dp(2), dp(6), dp(2), dp(5));
 
-            if (selectedCustomHoliday) {
-                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_HOLIDAY_BG, 12, UiStyle.CAL_HOLIDAY_BORDER, 1));
+            if (selected) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_OVERRIDE_BG, 12, UiStyle.CAL_OVERRIDE_BORDER, 2));
             } else if (d.equals(today)) {
                 cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_TODAY_BG, 12, UiStyle.CAL_TODAY_BORDER, 1));
             } else if (leave) {
@@ -361,7 +348,7 @@ public class MainActivity extends Activity {
                 cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_OVERTIME_BG, 12, UiStyle.CAL_OVERTIME_BORDER, 1));
             } else if (override) {
                 cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_OVERRIDE_BG, 12, UiStyle.CAL_OVERRIDE_BORDER, 1));
-            } else if (publicHoliday) {
+            } else if (holiday) {
                 cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_HOLIDAY_BG, 12, UiStyle.CAL_HOLIDAY_BORDER, 1));
             } else if (autoRest || manualRest || weekend) {
                 cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_REST_BG, 12, UiStyle.CAL_REST_BORDER, 1));
@@ -369,114 +356,222 @@ public class MainActivity extends Activity {
 
             TextView dt = text(String.valueOf(day), 14, d.equals(today));
             dt.setGravity(Gravity.CENTER);
-            if (before || (holidaySelectionMode && !future)) {
-                dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);
-            }
+            if (before) dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);
             cell.addView(dt);
 
             String value = "";
-            if (holidaySelectionMode) {
-                if (selectedCustomHoliday) value = "✓ 假期";
-                else if (publicHoliday) value = getBankHolidayName(d);
-            } else if (future) {
-                if (savedCustomHoliday) value = "假期";
-                else if (publicHoliday) value = getBankHolidayName(d);
+            if (future) {
+                if (holiday) value = getBankHolidayName(d);
                 else if (leave) value = "请假";
                 else if (manualRest) value = "休息";
                 else if (override) value = "已设置";
             } else if (!before) {
                 if (showingWageStats) {
                     value = moneyShort(wage);
-                    if (holiday) value = (wage > 0 ? moneyShort(wage) : "£0") + "\n" + (savedCustomHoliday ? "假期" : getBankHolidayName(d));
+                    if (holiday) value = (wage > 0 ? moneyShort(wage) : "£0") + "\n" + getBankHolidayName(d);
                     else if (leave || manualRest || autoRest) value = wage > 0 ? moneyShort(wage) : "£0";
                 } else {
-                    if (holiday) value = savedCustomHoliday ? "假期" : getBankHolidayName(d);
+                    if (holiday) value = getBankHolidayName(d);
                     else if (leave) value = "请假";
                     else if (manualRest || autoRest) value = overtime > 0 ? shortHours(overtime) : "休息";
                     else if (total > 0) value = shortHours(total);
                 }
             }
+            if (selected) value = value.isEmpty() ? "✓ 已选" : "✓ " + value;
 
-            TextView st = text(value, 10, leave || holiday || manualRest || override || autoRest || overtime > 0);
+            TextView st = text(value, 10, selected || leave || holiday || manualRest || override || autoRest || overtime > 0);
             st.setGravity(Gravity.CENTER);
             st.setSingleLine(false);
             cell.addView(st);
 
-            if (holidaySelectionMode && future && !before) {
-                cell.setOnClickListener(v -> {
-                    if (!pendingHolidayDates.remove(d)) pendingHolidayDates.add(d);
-                    updateHolidaySelectionUi();
-                    rebuildSharedCalendar(LocalDate.now());
-                });
-            } else if (!holidaySelectionMode && !before) {
-                cell.setOnClickListener(v -> {
-                    if (isBankHoliday(d)) {
-                        Toast.makeText(this, getBankHolidayName(d) + "：假日不计正常工时，可在其他工作日设置加班", Toast.LENGTH_SHORT).show();
-                    } else {
-                        showEditDayDialog(d);
+            if (!before) {
+                if (multiSelectionMode) {
+                    cell.setOnClickListener(v -> {
+                        if (holiday) {
+                            Toast.makeText(this, "公共假日由系统规则管理，不能批量修改", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        toggleMultiSelection(d);
+                    });
+                } else {
+                    cell.setOnClickListener(v -> {
+                        if (holiday) {
+                            Toast.makeText(this, getBankHolidayName(d) + "：公共假日由系统规则管理", Toast.LENGTH_SHORT).show();
+                        } else {
+                            showEditDayDialog(d);
+                        }
+                    });
+                    if (!holiday) {
+                        cell.setOnLongClickListener(v -> {
+                            enterMultiSelection(d);
+                            return true;
+                        });
                     }
-                });
+                }
             }
 
             calendarGrid.addView(cell, gridParams());
         }
     }
 
-    private void enterHolidaySelectionMode() {
-        if (holidaySelectionMode) return;
-        holidaySelectionMode = true;
-        monthBeforeHolidaySelection = displayedMonth;
-        pendingHolidayDates = new HashSet<>(HolidayCalendar.getCustomHolidayDates(prefs));
-        if (displayedMonth.isBefore(YearMonth.now())) displayedMonth = YearMonth.now();
-        updateHolidaySelectionUi();
-        refreshMonth();
+    private void enterMultiSelection(LocalDate initialDate) {
+        LocalDate ws = getWorkStartDate();
+        if (initialDate == null || (ws != null && initialDate.isBefore(ws))
+                || HolidayCalendar.isPublicHoliday(prefs, initialDate)) return;
+        multiSelectionMode = true;
+        selectedDates.clear();
+        selectedDates.add(initialDate);
+        updateMultiSelectionUi();
+        rebuildSharedCalendar(LocalDate.now());
     }
 
-    private void cancelHolidaySelection() {
-        if (!holidaySelectionMode) return;
-        holidaySelectionMode = false;
-        pendingHolidayDates.clear();
-        if (monthBeforeHolidaySelection != null) displayedMonth = monthBeforeHolidaySelection;
-        monthBeforeHolidaySelection = null;
-        updateHolidaySelectionUi();
-        refreshMonth();
-    }
-
-    private void saveHolidaySelection() {
-        if (!holidaySelectionMode) return;
-        Set<String> values = new HashSet<>();
-        int futureCount = 0;
-        LocalDate today = LocalDate.now();
-        for (LocalDate date : pendingHolidayDates) {
-            values.add(date.toString());
-            if (date.isAfter(today)) futureCount++;
+    private void toggleMultiSelection(LocalDate date) {
+        if (!multiSelectionMode || date == null) return;
+        if (!selectedDates.remove(date)) selectedDates.add(date);
+        if (selectedDates.isEmpty()) {
+            cancelMultiSelection();
+            return;
         }
-        prefs.edit().putStringSet(HolidayCalendar.CUSTOM_DATES_KEY, values).apply();
-        WorkAlarmManager.forceSync(this);
-
-        holidaySelectionMode = false;
-        if (monthBeforeHolidaySelection != null) displayedMonth = monthBeforeHolidaySelection;
-        monthBeforeHolidaySelection = null;
-        pendingHolidayDates.clear();
-        updateHolidaySelectionUi();
-        refreshAll();
-        if (wagePanel != null) wagePanel.refresh();
-        Toast.makeText(this, "已保存 " + futureCount + " 个未来预定假期", Toast.LENGTH_SHORT).show();
+        updateMultiSelectionUi();
+        rebuildSharedCalendar(LocalDate.now());
     }
 
-    private void updateHolidaySelectionUi() {
-        if (holidaySelectButton == null || holidaySelectionActions == null || calendarHint == null) return;
-        holidaySelectButton.setVisibility(holidaySelectionMode ? View.GONE : View.VISIBLE);
-        holidaySelectionActions.setVisibility(holidaySelectionMode ? View.VISIBLE : View.GONE);
-        if (holidaySelectionMode) {
-            int count = 0;
-            LocalDate today = LocalDate.now();
-            for (LocalDate date : pendingHolidayDates) if (date.isAfter(today)) count++;
-            if (holidaySelectionInfo != null) holidaySelectionInfo.setText("已选 " + count + " 天");
-            calendarHint.setText("预定假期多选：直接点未来日期，可切换月份；选完点“保存”。已高亮日期再次点击可取消。");
+    private void cancelMultiSelection() {
+        if (!multiSelectionMode) return;
+        multiSelectionMode = false;
+        selectedDates.clear();
+        updateMultiSelectionUi();
+        refreshMonth();
+    }
+
+    private void updateMultiSelectionUi() {
+        if (multiSelectionActions == null || calendarHint == null) return;
+        multiSelectionActions.setVisibility(multiSelectionMode ? View.VISIBLE : View.GONE);
+        if (multiSelectionMode) {
+            if (multiSelectionInfo != null) multiSelectionInfo.setText("已选 " + selectedDates.size() + " 天");
+            calendarHint.setText("多选编辑：点击日期继续选择或取消；可切换月份继续选，完成后点“编辑”。");
         } else {
-            calendarHint.setText("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录；“预定假期”可直接多选未来日期。");
+            calendarHint.setText("点击日期可编辑当天；长按任意可编辑日期可进入多选，再批量设置请假、休息或恢复自动。");
         }
+    }
+
+    private void showBatchEditDialog() {
+        if (!multiSelectionMode || selectedDates.isEmpty()) return;
+
+        LinearLayout box = vertical();
+        box.setPadding(dp(20), dp(8), dp(20), dp(6));
+        box.addView(text("将同时修改 " + selectedDates.size() + " 天", 14, true));
+
+        RadioGroup group = new RadioGroup(this);
+        RadioButton leave = new RadioButton(this);
+        RadioButton rest = new RadioButton(this);
+        RadioButton normal = new RadioButton(this);
+        RadioButton automatic = new RadioButton(this);
+        leave.setText("请假（0 小时）");
+        rest.setText("休息（0 小时）");
+        normal.setText("正常上班");
+        automatic.setText("恢复自动规则");
+        group.addView(leave);
+        group.addView(rest);
+        group.addView(normal);
+        group.addView(automatic);
+        leave.setChecked(true);
+        box.addView(group);
+
+        TextView reasonLabel = text("请假原因 / 描述（可选）", 14, false);
+        reasonLabel.setPadding(0, dp(8), 0, 0);
+        box.addView(reasonLabel);
+        EditText reason = new EditText(this);
+        reason.setMinLines(2);
+        reason.setMaxLines(4);
+        box.addView(reason);
+
+        Runnable updateControls = () -> reason.setEnabled(leave.isChecked());
+        group.setOnCheckedChangeListener((g, id) -> updateControls.run());
+        updateControls.run();
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("批量编辑日期")
+                .setView(box)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("应用", null)
+                .create();
+
+        dialog.setOnShowListener(x -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String note = reason.getText().toString().trim();
+            String defaultStart = prefs.getString(START_TIME_KEY, "09:00");
+            String defaultEnd = prefs.getString(END_TIME_KEY, "17:30");
+            int defaultBreak = prefs.getInt(BREAK_MINUTES_KEY, 30);
+            float daily = getConfiguredDailyHours();
+
+            SharedPreferences.Editor editor = prefs.edit();
+            int changed = 0;
+            for (LocalDate date : new HashSet<>(selectedDates)) {
+                if (HolidayCalendar.isPublicHoliday(prefs, date)) continue;
+
+                if (leave.isChecked()) {
+                    editor.putBoolean(leaveKey(date), true)
+                            .remove(restKey(date))
+                            .remove(overrideKey(date))
+                            .remove(dayStartKey(date))
+                            .remove(dayEndKey(date))
+                            .remove(dayBreakKey(date))
+                            .remove(overtimeStartKey(date))
+                            .remove(overtimeEndKey(date));
+                    if (note.isEmpty()) editor.remove(leaveNoteKey(date));
+                    else editor.putString(leaveNoteKey(date), note);
+                } else if (rest.isChecked()) {
+                    editor.putBoolean(restKey(date), true)
+                            .remove(leaveKey(date))
+                            .remove(leaveNoteKey(date))
+                            .remove(overrideKey(date))
+                            .remove(dayStartKey(date))
+                            .remove(dayEndKey(date))
+                            .remove(dayBreakKey(date))
+                            .remove(overtimeStartKey(date))
+                            .remove(overtimeEndKey(date));
+                } else if (normal.isChecked()) {
+                    editor.remove(leaveKey(date))
+                            .remove(leaveNoteKey(date))
+                            .remove(restKey(date))
+                            .remove(overtimeStartKey(date))
+                            .remove(overtimeEndKey(date));
+                    if (isConfiguredWorkDay(date)) {
+                        editor.remove(overrideKey(date))
+                                .remove(dayStartKey(date))
+                                .remove(dayEndKey(date))
+                                .remove(dayBreakKey(date));
+                    } else {
+                        editor.putFloat(overrideKey(date), daily)
+                                .putString(dayStartKey(date), defaultStart)
+                                .putString(dayEndKey(date), defaultEnd)
+                                .putInt(dayBreakKey(date), defaultBreak);
+                    }
+                } else {
+                    editor.remove(overrideKey(date))
+                            .remove(dayStartKey(date))
+                            .remove(dayEndKey(date))
+                            .remove(dayBreakKey(date))
+                            .remove(overtimeStartKey(date))
+                            .remove(overtimeEndKey(date))
+                            .remove(leaveKey(date))
+                            .remove(leaveNoteKey(date))
+                            .remove(restKey(date))
+                            .remove(wageDeductKey(date));
+                }
+                changed++;
+            }
+            editor.apply();
+            WorkAlarmManager.forceSync(this);
+            multiSelectionMode = false;
+            selectedDates.clear();
+            dialog.dismiss();
+            updateMultiSelectionUi();
+            refreshAll();
+            if (wagePanel != null) wagePanel.refresh();
+            Toast.makeText(this, "已批量修改 " + changed + " 天", Toast.LENGTH_SHORT).show();
+        }));
+        dialog.show();
     }
 
     private String moneyShort(float value) {
@@ -538,17 +633,11 @@ public class MainActivity extends Activity {
         LocalDate ws = getWorkStartDate();
         YearMonth first = ws == null ? null : YearMonth.from(ws);
 
-        if (holidaySelectionMode) {
-            if (displayedMonth.isBefore(now)) displayedMonth = now;
-            monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n选择预定假期");
-            previousMonthButton.setEnabled(displayedMonth.isAfter(now));
-            nextMonthButton.setEnabled(true);
-        } else {
-            if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
-            monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n点击选择月份");
-            previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first));
-            nextMonthButton.setEnabled(true);
-        }
+        if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
+        monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n"
+                + (multiSelectionMode ? "多选编辑" : "点击选择月份"));
+        previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first));
+        nextMonthButton.setEnabled(true);
 
         LocalDate start = displayedMonth.atDay(1);
         if (ws != null && start.isBefore(ws)) start = ws;
@@ -562,8 +651,8 @@ public class MainActivity extends Activity {
             totalWageText.setText(String.format(Locale.UK, "£%.2f", wagePanel.getDisplayedMonthWage()));
         }
         rebuildSharedCalendar(today);
-        if (!holidaySelectionMode) refreshWorkMonthDetails();
-        updateHolidaySelectionUi();
+        if (!multiSelectionMode) refreshWorkMonthDetails();
+        updateMultiSelectionUi();
     }
 
     private void refreshWeek() {
