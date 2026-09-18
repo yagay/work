@@ -269,7 +269,7 @@ public class MainActivity extends Activity {
         TextView title = text("月历", 19, true);
         titleRow.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
-        holidaySelectButton = button("预定假日");
+        holidaySelectButton = button("预定假期");
         holidaySelectButton.setTextSize(13);
         holidaySelectButton.setOnClickListener(v -> enterHolidaySelectionMode());
         titleRow.addView(holidaySelectButton, new LinearLayout.LayoutParams(dp(108), dp(42)));
@@ -378,18 +378,18 @@ public class MainActivity extends Activity {
 
             String value = "";
             if (holidaySelectionMode) {
-                if (selectedCustomHoliday) value = "✓ 预定";
+                if (selectedCustomHoliday) value = "✓ 假期";
                 else if (publicHoliday) value = getBankHolidayName(d);
             } else if (future) {
-                if (savedCustomHoliday) value = "预定假日";
+                if (savedCustomHoliday) value = "假期";
                 else if (publicHoliday) value = getBankHolidayName(d);
             } else if (!before) {
                 if (showingWageStats) {
                     value = moneyShort(wage);
-                    if (holiday) value = (wage > 0 ? moneyShort(wage) : "£0") + "\n" + getBankHolidayName(d);
+                    if (holiday) value = (wage > 0 ? moneyShort(wage) : "£0") + "\n" + (savedCustomHoliday ? "假期" : getBankHolidayName(d));
                     else if (leave || manualRest || autoRest) value = wage > 0 ? moneyShort(wage) : "£0";
                 } else {
-                    if (holiday) value = getBankHolidayName(d);
+                    if (holiday) value = savedCustomHoliday ? "假期" : getBankHolidayName(d);
                     else if (leave) value = "请假";
                     else if (manualRest || autoRest) value = overtime > 0 ? shortHours(overtime) : "休息";
                     else if (total > 0) value = shortHours(total);
@@ -460,7 +460,7 @@ public class MainActivity extends Activity {
         updateHolidaySelectionUi();
         refreshAll();
         if (wagePanel != null) wagePanel.refresh();
-        Toast.makeText(this, "已保存 " + futureCount + " 个未来预定假日", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "已保存 " + futureCount + " 个未来预定假期", Toast.LENGTH_SHORT).show();
     }
 
     private void updateHolidaySelectionUi() {
@@ -472,9 +472,9 @@ public class MainActivity extends Activity {
             LocalDate today = LocalDate.now();
             for (LocalDate date : pendingHolidayDates) if (date.isAfter(today)) count++;
             if (holidaySelectionInfo != null) holidaySelectionInfo.setText("已选 " + count + " 天");
-            calendarHint.setText("预定假日多选：直接点未来日期，可切换月份；选完点“保存”。已高亮日期再次点击可取消。");
+            calendarHint.setText("预定假期多选：直接点未来日期，可切换月份；选完点“保存”。已高亮日期再次点击可取消。");
         } else {
-            calendarHint.setText("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录；“预定假日”可直接多选未来日期。");
+            calendarHint.setText("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录；“预定假期”可直接多选未来日期。");
         }
     }
 
@@ -539,7 +539,7 @@ public class MainActivity extends Activity {
 
         if (holidaySelectionMode) {
             if (displayedMonth.isBefore(now)) displayedMonth = now;
-            monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n选择预定假日");
+            monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n选择预定假期");
             previousMonthButton.setEnabled(displayedMonth.isAfter(now));
             nextMonthButton.setEnabled(true);
         } else {
