@@ -21,7 +21,7 @@ public final class HolidayCalendar {
     private HolidayCalendar() { }
 
     public static String getHolidayName(SharedPreferences prefs, LocalDate date) {
-        if (isCustomHoliday(prefs, date)) return "预定假日";
+        if (isCustomHoliday(prefs, date)) return "预定假期";
         return getPublicHolidayName(prefs, date);
     }
 
