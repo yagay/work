@@ -342,7 +342,7 @@ public class SettingsActivity extends Activity {
         TextView holidayTitle = text("公共假日", UI_SECTION_TITLE_SP, true);
         holidayTitle.setPadding(0, 0, 0, dp(6));
         holidaySection.addView(holidayTitle);
-        TextView holidayInfo = text("公共假日会自动从正常工时和上班闹钟中排除；是否计算一天工资可在下方设置。预定假日直接在主页月历中多选。", UI_BODY_SP, false);
+        TextView holidayInfo = text("公共假日会自动从正常工时和上班闹钟中排除；是否计算一天工资可在下方设置。预定假期直接在主页月历中多选。", UI_BODY_SP, false);
         holidayInfo.setPadding(0, 0, 0, dp(8));
         holidaySection.addView(holidayInfo);
         holidayRegionButton = new Button(this);
