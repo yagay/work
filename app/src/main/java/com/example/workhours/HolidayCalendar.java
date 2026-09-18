@@ -14,11 +14,18 @@ import java.util.Set;
 public final class HolidayCalendar {
     public static final String REGION_KEY = "holiday_region";
     public static final String HISTORY_KEY = "holiday_region_history";
+    public static final String CUSTOM_DATES_KEY = "custom_holiday_dates";
+    public static final String PAID_KEY = "public_holiday_paid";
     public static final String DEFAULT_REGION = "gb-ew";
 
     private HolidayCalendar() { }
 
     public static String getHolidayName(SharedPreferences prefs, LocalDate date) {
+        if (isCustomHoliday(prefs, date)) return "预定假日";
+        return getPublicHolidayName(prefs, date);
+    }
+
+    public static String getPublicHolidayName(SharedPreferences prefs, LocalDate date) {
         String region = regionForDate(prefs, date);
         switch (region) {
             case "none": return null;
@@ -30,6 +37,28 @@ public final class HolidayCalendar {
             case "gb-ew":
             default: return englandWales(date);
         }
+    }
+
+    public static boolean isPublicHoliday(SharedPreferences prefs, LocalDate date) {
+        return getPublicHolidayName(prefs, date) != null;
+    }
+
+    public static boolean isCustomHoliday(SharedPreferences prefs, LocalDate date) {
+        if (prefs == null || date == null) return false;
+        Set<String> dates = prefs.getStringSet(CUSTOM_DATES_KEY, null);
+        return dates != null && dates.contains(date.toString());
+    }
+
+    public static Set<LocalDate> getCustomHolidayDates(SharedPreferences prefs) {
+        Set<LocalDate> out = new HashSet<>();
+        if (prefs == null) return out;
+        Set<String> raw = prefs.getStringSet(CUSTOM_DATES_KEY, null);
+        if (raw == null) return out;
+        for (String value : raw) {
+            try { out.add(LocalDate.parse(value)); }
+            catch (Exception ignored) { }
+        }
+        return out;
     }
 
     public static String regionForDate(SharedPreferences prefs, LocalDate date) {
