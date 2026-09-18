@@ -238,10 +238,8 @@ public class MainActivity extends Activity {
         monthTitle=text("",18,true); monthTitle.setGravity(Gravity.CENTER); monthTitle.setPadding(dp(8),dp(6),dp(8),dp(6)); monthTitle.setMinHeight(dp(68)); monthTitle.setOnClickListener(v->{ if(!holidaySelectionMode) chooseWorkMonth(); });
         nav.addView(monthTitle,new LinearLayout.LayoutParams(0,-2,1f));
         nextMonthButton=button("›"); nextMonthButton.setTextSize(24); nextMonthButton.setOnClickListener(v->{
-            if (holidaySelectionMode || displayedMonth.isBefore(YearMonth.now())) {
-                displayedMonth = displayedMonth.plusMonths(1);
-                refreshMonth();
-            }
+            displayedMonth = displayedMonth.plusMonths(1);
+            refreshMonth();
         });
         nav.addView(nextMonthButton,new LinearLayout.LayoutParams(dp(58),dp(48)));
 
@@ -371,7 +369,7 @@ public class MainActivity extends Activity {
 
             TextView dt = text(String.valueOf(day), 14, d.equals(today));
             dt.setGravity(Gravity.CENTER);
-            if ((!holidaySelectionMode && future) || before || (holidaySelectionMode && !future)) {
+            if (before || (holidaySelectionMode && !future)) {
                 dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);
             }
             cell.addView(dt);
@@ -383,6 +381,9 @@ public class MainActivity extends Activity {
             } else if (future) {
                 if (savedCustomHoliday) value = "假期";
                 else if (publicHoliday) value = getBankHolidayName(d);
+                else if (leave) value = "请假";
+                else if (manualRest) value = "休息";
+                else if (override) value = "已设置";
             } else if (!before) {
                 if (showingWageStats) {
                     value = moneyShort(wage);
@@ -407,7 +408,7 @@ public class MainActivity extends Activity {
                     updateHolidaySelectionUi();
                     rebuildSharedCalendar(LocalDate.now());
                 });
-            } else if (!holidaySelectionMode && !future && !before) {
+            } else if (!holidaySelectionMode && !before) {
                 cell.setOnClickListener(v -> {
                     if (isBankHoliday(d)) {
                         Toast.makeText(this, getBankHolidayName(d) + "：假日不计正常工时，可在其他工作日设置加班", Toast.LENGTH_SHORT).show();
@@ -543,11 +544,10 @@ public class MainActivity extends Activity {
             previousMonthButton.setEnabled(displayedMonth.isAfter(now));
             nextMonthButton.setEnabled(true);
         } else {
-            if (displayedMonth.isAfter(now)) displayedMonth = now;
             if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
             monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n点击选择月份");
             previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first));
-            nextMonthButton.setEnabled(displayedMonth.isBefore(now));
+            nextMonthButton.setEnabled(true);
         }
 
         LocalDate start = displayedMonth.atDay(1);
@@ -651,7 +651,7 @@ public class MainActivity extends Activity {
     }
 
     private void chooseWorkWeek(){LocalDate initial=displayedWeekStart,today=LocalDate.now(),ws=getWorkStartDate();DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate picked=LocalDate.of(y,m+1,day);displayedWeekStart=mondayOf(picked);refreshWeek();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
-    private void chooseWorkMonth(){LocalDate ws=getWorkStartDate();int minYear=ws==null?Math.max(2000,displayedMonth.getYear()-20):ws.getYear(),maxYear=YearMonth.now().getYear();LinearLayout box=horizontal();box.setPadding(dp(24),dp(12),dp(24),dp(4));box.setGravity(Gravity.CENTER);NumberPicker yp=new NumberPicker(this);yp.setMinValue(minYear);yp.setMaxValue(maxYear);yp.setValue(Math.max(minYear,Math.min(maxYear,displayedMonth.getYear())));box.addView(yp,new LinearLayout.LayoutParams(0,-2,1f));NumberPicker mp=new NumberPicker(this);mp.setMinValue(1);mp.setMaxValue(12);mp.setDisplayedValues(new String[]{"1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"});mp.setValue(displayedMonth.getMonthValue());box.addView(mp,new LinearLayout.LayoutParams(0,-2,1f));AlertDialog dialog=new AlertDialog.Builder(this).setTitle("选择月份").setView(box).setNegativeButton("取消",null).setPositiveButton("确定",null).create();dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{YearMonth picked=YearMonth.of(yp.getValue(),mp.getValue()),now=YearMonth.now(),first=ws==null?null:YearMonth.from(ws);if(picked.isAfter(now)){Toast.makeText(this,"不能选择未来月份",Toast.LENGTH_SHORT).show();return;}if(first!=null&&picked.isBefore(first)){Toast.makeText(this,"不能早于工作开始月份",Toast.LENGTH_SHORT).show();return;}displayedMonth=picked;refreshMonth();dialog.dismiss();}));dialog.show();}
+    private void chooseWorkMonth(){LocalDate ws=getWorkStartDate();int minYear=ws==null?Math.max(2000,displayedMonth.getYear()-20):ws.getYear(),maxYear=Math.max(displayedMonth.getYear(),YearMonth.now().plusYears(10).getYear());LinearLayout box=horizontal();box.setPadding(dp(24),dp(12),dp(24),dp(4));box.setGravity(Gravity.CENTER);NumberPicker yp=new NumberPicker(this);yp.setMinValue(minYear);yp.setMaxValue(maxYear);yp.setValue(Math.max(minYear,Math.min(maxYear,displayedMonth.getYear())));box.addView(yp,new LinearLayout.LayoutParams(0,-2,1f));NumberPicker mp=new NumberPicker(this);mp.setMinValue(1);mp.setMaxValue(12);mp.setDisplayedValues(new String[]{"1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"});mp.setValue(displayedMonth.getMonthValue());box.addView(mp,new LinearLayout.LayoutParams(0,-2,1f));AlertDialog dialog=new AlertDialog.Builder(this).setTitle("选择月份").setView(box).setNegativeButton("取消",null).setPositiveButton("确定",null).create();dialog.setOnShowListener(x->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{YearMonth picked=YearMonth.of(yp.getValue(),mp.getValue()),first=ws==null?null:YearMonth.from(ws);if(first!=null&&picked.isBefore(first)){Toast.makeText(this,"不能早于工作开始月份",Toast.LENGTH_SHORT).show();return;}displayedMonth=picked;refreshMonth();dialog.dismiss();}));dialog.show();}
     private void showDatePicker(boolean startPicker){LocalDate initial=startPicker?rangeStart:rangeEnd,today=LocalDate.now(),ws=getWorkStartDate();if(ws!=null&&initial.isBefore(ws))initial=ws;DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate s=LocalDate.of(y,m+1,day);if(s.isAfter(today))s=today;if(ws!=null&&s.isBefore(ws))s=ws;if(startPicker){rangeStart=s;if(rangeEnd.isBefore(rangeStart))rangeEnd=rangeStart;}else{rangeEnd=s;if(rangeStart.isAfter(rangeEnd))rangeStart=rangeEnd;}updateRangeButtons();calculateRange();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
     private void updateRangeButtons(){DateTimeFormatter f=DateTimeFormatter.ofPattern("yyyy-MM-dd");rangeStartButton.setText("开始\n"+rangeStart.format(f));rangeEndButton.setText("结束\n"+rangeEnd.format(f));}
     private void calculateRange(){if(rangeDetailsContainer==null)return;rangeDetailsContainer.removeAllViews();LocalDate today=LocalDate.now(),ws=getWorkStartDate(),start=rangeStart,end=rangeEnd.isAfter(today)?today:rangeEnd;if(ws!=null&&start.isBefore(ws))start=ws;if(start.isAfter(end)){rangeSummaryText.setText("开始日期不能晚于结束日期");return;}Stats s=collectStats(start,end);rangeSummaryText.setText(start+" 至 "+end+"\n总工时："+formatDurationHours(s.totalHours)+"（加班 "+formatDurationHours(s.overtimeHours)+"）\n"+StatusStatsFormatter.format(s.workDays,s.leaveDays,s.holidayDays,s.restDays));addPeriodDetails(rangeDetailsContainer,start,end,false,true);}
