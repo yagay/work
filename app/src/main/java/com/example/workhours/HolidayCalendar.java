@@ -8,6 +8,8 @@ import org.json.JSONObject;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class HolidayCalendar {
     public static final String REGION_KEY = "holiday_region";
