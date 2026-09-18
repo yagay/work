@@ -466,6 +466,10 @@ public class MainActivity extends Activity {
         RadioButton rest = new RadioButton(this);
         RadioButton normal = new RadioButton(this);
         RadioButton automatic = new RadioButton(this);
+        leave.setId(View.generateViewId());
+        rest.setId(View.generateViewId());
+        normal.setId(View.generateViewId());
+        automatic.setId(View.generateViewId());
         leave.setText("请假（0 小时）");
         rest.setText("休息（0 小时）");
         normal.setText("正常上班");
