@@ -490,10 +490,29 @@ public class WagePanel extends LinearLayout {
         if (date.isAfter(LocalDate.now()) || (ws != null && date.isBefore(ws))) return 0f;
         WageRule rule = getWageRuleForDate(date);
         if (rule == null) return 0f;
-        if (!"monthly".equals(rule.mode)) return getHours(date) * rule.amount;
+
+        boolean publicHoliday = HolidayCalendar.isPublicHoliday(prefs, date);
+        boolean holidayPaid = isPublicHolidayPaid(rule);
+        if (!"monthly".equals(rule.mode)) {
+            if (publicHoliday && holidayPaid && isPlannedPaidDay(date)) {
+                return getConfiguredDailyHours() * rule.amount;
+            }
+            return getHours(date) * rule.amount;
+        }
+
         if (!isPlannedPaidDay(date)) return 0f;
+        if (publicHoliday && !holidayPaid) return 0f;
         int planned = getPlannedPaidDays(YearMonth.from(date));
         return planned <= 0 ? 0f : rule.amount / planned;
+    }
+
+    private boolean isPublicHolidayPaid(WageRule rule) {
+        if (prefs.contains(HolidayCalendar.PAID_KEY)) {
+            return prefs.getBoolean(HolidayCalendar.PAID_KEY, false);
+        }
+        // Preserve the app's pre-setting behaviour until the user explicitly chooses:
+        // monthly salary kept public-holiday pay, hourly pay did not.
+        return rule != null && "monthly".equals(rule.mode);
     }
 
     private boolean isMonthlyMode() {
