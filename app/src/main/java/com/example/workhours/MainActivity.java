@@ -61,7 +61,10 @@ public class MainActivity extends Activity {
     private LocalDate rangeStart, rangeEnd;
     private TextView monthTitle, totalHoursText, totalWageText, statusStatsText;
     private Button previousMonthButton, nextMonthButton, previousWeekButton, nextWeekButton;
+    private Button holidaySelectButton, holidaySaveButton, holidayCancelButton;
     private GridLayout calendarGrid;
+    private LinearLayout holidaySelectionActions;
+    private TextView calendarHint, holidaySelectionInfo;
     private LinearLayout exceptionsContainer, weekDetailsContainer, rangeDetailsContainer;
     private LinearLayout monthSectionContainer, weekSectionContainer, rangeSectionContainer;
     private LinearLayout workContent, wageContent;
@@ -73,6 +76,9 @@ public class MainActivity extends Activity {
     private TextView weekTitle, weekSummaryText, rangeSummaryText;
     private Button rangeStartButton, rangeEndButton;
     private boolean showingWageStats = false;
+    private boolean holidaySelectionMode = false;
+    private Set<LocalDate> pendingHolidayDates = new HashSet<>();
+    private YearMonth monthBeforeHolidaySelection;
     private boolean appliedDarkTheme;
 
     @Override
@@ -219,11 +225,24 @@ public class MainActivity extends Activity {
         root.addView(nav, np);
         previousMonthButton = button("‹");
         previousMonthButton.setTextSize(24);
-        previousMonthButton.setOnClickListener(v -> { YearMonth target=displayedMonth.minusMonths(1); LocalDate ws=getWorkStartDate(); if(ws==null||!target.isBefore(YearMonth.from(ws))){displayedMonth=target;refreshMonth();}});
+        previousMonthButton.setOnClickListener(v -> {
+            YearMonth target = displayedMonth.minusMonths(1);
+            if (holidaySelectionMode) {
+                if (!target.isBefore(YearMonth.now())) { displayedMonth = target; refreshMonth(); }
+                return;
+            }
+            LocalDate ws = getWorkStartDate();
+            if (ws == null || !target.isBefore(YearMonth.from(ws))) { displayedMonth = target; refreshMonth(); }
+        });
         nav.addView(previousMonthButton,new LinearLayout.LayoutParams(dp(58),dp(48)));
-        monthTitle=text("",18,true); monthTitle.setGravity(Gravity.CENTER); monthTitle.setPadding(dp(8),dp(6),dp(8),dp(6)); monthTitle.setMinHeight(dp(68)); monthTitle.setOnClickListener(v->chooseWorkMonth());
+        monthTitle=text("",18,true); monthTitle.setGravity(Gravity.CENTER); monthTitle.setPadding(dp(8),dp(6),dp(8),dp(6)); monthTitle.setMinHeight(dp(68)); monthTitle.setOnClickListener(v->{ if(!holidaySelectionMode) chooseWorkMonth(); });
         nav.addView(monthTitle,new LinearLayout.LayoutParams(0,-2,1f));
-        nextMonthButton=button("›"); nextMonthButton.setTextSize(24); nextMonthButton.setOnClickListener(v->{if(displayedMonth.isBefore(YearMonth.now())){displayedMonth=displayedMonth.plusMonths(1);refreshMonth();}});
+        nextMonthButton=button("›"); nextMonthButton.setTextSize(24); nextMonthButton.setOnClickListener(v->{
+            if (holidaySelectionMode || displayedMonth.isBefore(YearMonth.now())) {
+                displayedMonth = displayedMonth.plusMonths(1);
+                refreshMonth();
+            }
+        });
         nav.addView(nextMonthButton,new LinearLayout.LayoutParams(dp(58),dp(48)));
 
         LinearLayout cards=horizontal();
@@ -241,55 +260,221 @@ public class MainActivity extends Activity {
     }
 
     private void buildSharedCalendar(LinearLayout root) {
+        LinearLayout titleRow = horizontal();
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams titleRowParams = new LinearLayout.LayoutParams(-1, dp(48));
+        titleRowParams.topMargin = dp(12);
+        root.addView(titleRow, titleRowParams);
+
         TextView title = text("月历", 19, true);
-        title.setPadding(0, dp(18), 0, dp(8));
-        root.addView(title);
+        titleRow.addView(title, new LinearLayout.LayoutParams(0, dp(48), 1f));
+
+        holidaySelectButton = button("预定假日");
+        holidaySelectButton.setTextSize(13);
+        holidaySelectButton.setOnClickListener(v -> enterHolidaySelectionMode());
+        titleRow.addView(holidaySelectButton, new LinearLayout.LayoutParams(dp(108), dp(42)));
+
+        holidaySelectionActions = horizontal();
+        holidaySelectionActions.setGravity(Gravity.CENTER_VERTICAL);
+        holidaySelectionActions.setVisibility(View.GONE);
+        LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(-1, dp(48));
+        actionParams.bottomMargin = dp(5);
+        root.addView(holidaySelectionActions, actionParams);
+
+        holidaySelectionInfo = text("", 13, true);
+        holidaySelectionActions.addView(holidaySelectionInfo, new LinearLayout.LayoutParams(0, dp(48), 1f));
+
+        holidayCancelButton = button("取消");
+        holidayCancelButton.setOnClickListener(v -> cancelHolidaySelection());
+        holidaySelectionActions.addView(holidayCancelButton, new LinearLayout.LayoutParams(dp(78), dp(42)));
+
+        holidaySaveButton = button("保存");
+        UiStyle.button(this, holidaySaveButton, true);
+        holidaySaveButton.setOnClickListener(v -> saveHolidaySelection());
+        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(dp(78), dp(42));
+        saveParams.leftMargin = dp(6);
+        holidaySelectionActions.addView(holidaySaveButton, saveParams);
+
         calendarGrid = new GridLayout(this);
         calendarGrid.setColumnCount(7);
         calendarGrid.setAlignmentMode(GridLayout.ALIGN_BOUNDS);
         root.addView(calendarGrid);
-        TextView hint = text("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录。", 13, false);
-        hint.setPadding(0, dp(8), 0, dp(4));
-        root.addView(hint);
+
+        calendarHint = text("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录。", 13, false);
+        calendarHint.setPadding(0, dp(8), 0, dp(4));
+        root.addView(calendarHint);
+        updateHolidaySelectionUi();
     }
 
     private void rebuildSharedCalendar(LocalDate today) {
         if (calendarGrid == null) return;
         calendarGrid.removeAllViews();
-        String[] hs={"一","二","三","四","五","六","日"};
-        for(int i=0;i<7;i++){TextView h=text(hs[i],13,true);h.setGravity(Gravity.CENTER);if(i>=5)h.setTextColor(UiStyle.WEEKEND_TEXT);calendarGrid.addView(h,gridParams());}
-        LocalDate ws=getWorkStartDate();
-        int leading=displayedMonth.atDay(1).getDayOfWeek().getValue()-1,days=displayedMonth.lengthOfMonth(),cells=((leading+days+6)/7)*7;
-        float daily=getConfiguredDailyHours();
-        for(int i=0;i<cells;i++){
-            int day=i-leading+1;
-            if(day<1||day>days){calendarGrid.addView(text("",13,false),gridParams());continue;}
-            LocalDate d=displayedMonth.atDay(day);
-            boolean future=d.isAfter(today),before=ws!=null&&d.isBefore(ws),weekend=d.getDayOfWeek()==DayOfWeek.SATURDAY||d.getDayOfWeek()==DayOfWeek.SUNDAY;
-            boolean holiday=!before&&isBankHoliday(d),leave=!holiday&&!before&&isLeave(d),manualRest=!holiday&&!leave&&!before&&isManualRest(d),configured=!before&&isConfiguredWorkDay(d)&&!holiday,override=!holiday&&!leave&&!manualRest&&!before&&hasOverride(d),autoRest=!holiday&&!leave&&!manualRest&&!override&&!before&&!configured;
-            float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured),overtime=(future||before)?0:getOvertimeHours(d),total=normal+overtime;
-            float wage=(future||before||wagePanel==null)?0:wagePanel.getWageForDateValue(d);
-            LinearLayout cell=vertical(); cell.setGravity(Gravity.CENTER); cell.setPadding(dp(2),dp(6),dp(2),dp(5));
-            if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_TODAY_BG,12,UiStyle.CAL_TODAY_BORDER,1));
-            else if(leave)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_LEAVE_BG,12,UiStyle.CAL_LEAVE_BORDER,1));
-            else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERTIME_BG,12,UiStyle.CAL_OVERTIME_BORDER,1));
-            else if(override)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERRIDE_BG,12,UiStyle.CAL_OVERRIDE_BORDER,1));
-            else if(holiday)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_HOLIDAY_BG,12,UiStyle.CAL_HOLIDAY_BORDER,1));
-            else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_REST_BG,12,UiStyle.CAL_REST_BORDER,1));
-            TextView dt=text(String.valueOf(day),14,d.equals(today)); dt.setGravity(Gravity.CENTER); if(future||before)dt.setTextColor(UiStyle.CAL_DISABLED_TEXT); cell.addView(dt);
-            String value="";
-            if(!future&&!before){
-                if(showingWageStats){
-                    value=moneyShort(wage);
-                    if(holiday) value=(wage>0?moneyShort(wage):"£0")+"\n"+getBankHolidayName(d);
-                    else if(leave||manualRest||autoRest) value=wage>0?moneyShort(wage):"£0";
-                }else{
-                    if(holiday)value=getBankHolidayName(d); else if(leave)value="请假"; else if(manualRest||autoRest)value=overtime>0?shortHours(overtime):"休息"; else if(total>0)value=shortHours(total);
+        String[] hs = {"一","二","三","四","五","六","日"};
+        for (int i = 0; i < 7; i++) {
+            TextView h = text(hs[i], 13, true);
+            h.setGravity(Gravity.CENTER);
+            if (i >= 5) h.setTextColor(UiStyle.WEEKEND_TEXT);
+            calendarGrid.addView(h, gridParams());
+        }
+
+        LocalDate ws = getWorkStartDate();
+        int leading = displayedMonth.atDay(1).getDayOfWeek().getValue() - 1;
+        int days = displayedMonth.lengthOfMonth();
+        int cells = ((leading + days + 6) / 7) * 7;
+        float daily = getConfiguredDailyHours();
+
+        for (int i = 0; i < cells; i++) {
+            int day = i - leading + 1;
+            if (day < 1 || day > days) {
+                calendarGrid.addView(text("", 13, false), gridParams());
+                continue;
+            }
+
+            LocalDate d = displayedMonth.atDay(day);
+            boolean future = d.isAfter(today);
+            boolean before = ws != null && d.isBefore(ws);
+            boolean weekend = d.getDayOfWeek() == DayOfWeek.SATURDAY || d.getDayOfWeek() == DayOfWeek.SUNDAY;
+            boolean publicHoliday = !before && HolidayCalendar.isPublicHoliday(prefs, d);
+            boolean savedCustomHoliday = !before && HolidayCalendar.isCustomHoliday(prefs, d);
+            boolean selectedCustomHoliday = holidaySelectionMode ? pendingHolidayDates.contains(d) : savedCustomHoliday;
+            boolean holiday = publicHoliday || selectedCustomHoliday;
+            boolean leave = !holiday && !before && isLeave(d);
+            boolean manualRest = !holiday && !leave && !before && isManualRest(d);
+            boolean configured = !before && isConfiguredWorkDay(d) && !holiday;
+            boolean override = !holiday && !leave && !manualRest && !before && hasOverride(d);
+            boolean autoRest = !holiday && !leave && !manualRest && !override && !before && !configured;
+
+            float normal = (future || before) ? 0 : getBaseHoursForDate(d, daily, configured);
+            float overtime = (future || before) ? 0 : getOvertimeHours(d);
+            float total = normal + overtime;
+            float wage = (future || before || wagePanel == null) ? 0 : wagePanel.getWageForDateValue(d);
+
+            LinearLayout cell = vertical();
+            cell.setGravity(Gravity.CENTER);
+            cell.setPadding(dp(2), dp(6), dp(2), dp(5));
+
+            if (selectedCustomHoliday) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_HOLIDAY_BG, 12, UiStyle.CAL_HOLIDAY_BORDER, 1));
+            } else if (d.equals(today)) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_TODAY_BG, 12, UiStyle.CAL_TODAY_BORDER, 1));
+            } else if (leave) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_LEAVE_BG, 12, UiStyle.CAL_LEAVE_BORDER, 1));
+            } else if (overtime > 0) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_OVERTIME_BG, 12, UiStyle.CAL_OVERTIME_BORDER, 1));
+            } else if (override) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_OVERRIDE_BG, 12, UiStyle.CAL_OVERRIDE_BORDER, 1));
+            } else if (publicHoliday) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_HOLIDAY_BG, 12, UiStyle.CAL_HOLIDAY_BORDER, 1));
+            } else if (autoRest || manualRest || weekend) {
+                cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_REST_BG, 12, UiStyle.CAL_REST_BORDER, 1));
+            }
+
+            TextView dt = text(String.valueOf(day), 14, d.equals(today));
+            dt.setGravity(Gravity.CENTER);
+            if ((!holidaySelectionMode && future) || before || (holidaySelectionMode && !future)) {
+                dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);
+            }
+            cell.addView(dt);
+
+            String value = "";
+            if (holidaySelectionMode) {
+                if (selectedCustomHoliday) value = "✓ 预定";
+                else if (publicHoliday) value = getBankHolidayName(d);
+            } else if (future) {
+                if (savedCustomHoliday) value = "预定假日";
+                else if (publicHoliday) value = getBankHolidayName(d);
+            } else if (!before) {
+                if (showingWageStats) {
+                    value = moneyShort(wage);
+                    if (holiday) value = (wage > 0 ? moneyShort(wage) : "£0") + "\n" + getBankHolidayName(d);
+                    else if (leave || manualRest || autoRest) value = wage > 0 ? moneyShort(wage) : "£0";
+                } else {
+                    if (holiday) value = getBankHolidayName(d);
+                    else if (leave) value = "请假";
+                    else if (manualRest || autoRest) value = overtime > 0 ? shortHours(overtime) : "休息";
+                    else if (total > 0) value = shortHours(total);
                 }
             }
-            TextView st=text(value,10,leave||holiday||manualRest||override||autoRest||overtime>0); st.setGravity(Gravity.CENTER); st.setSingleLine(false); cell.addView(st);
-            if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
-            calendarGrid.addView(cell,gridParams());
+
+            TextView st = text(value, 10, leave || holiday || manualRest || override || autoRest || overtime > 0);
+            st.setGravity(Gravity.CENTER);
+            st.setSingleLine(false);
+            cell.addView(st);
+
+            if (holidaySelectionMode && future && !before) {
+                cell.setOnClickListener(v -> {
+                    if (!pendingHolidayDates.remove(d)) pendingHolidayDates.add(d);
+                    updateHolidaySelectionUi();
+                    rebuildSharedCalendar(LocalDate.now());
+                });
+            } else if (!holidaySelectionMode && !future && !before) {
+                cell.setOnClickListener(v -> {
+                    if (isBankHoliday(d)) {
+                        Toast.makeText(this, getBankHolidayName(d) + "：假日不计正常工时，可在其他工作日设置加班", Toast.LENGTH_SHORT).show();
+                    } else {
+                        showEditDayDialog(d);
+                    }
+                });
+            }
+
+            calendarGrid.addView(cell, gridParams());
+        }
+    }
+
+    private void enterHolidaySelectionMode() {
+        if (holidaySelectionMode) return;
+        holidaySelectionMode = true;
+        monthBeforeHolidaySelection = displayedMonth;
+        pendingHolidayDates = new HashSet<>(HolidayCalendar.getCustomHolidayDates(prefs));
+        if (displayedMonth.isBefore(YearMonth.now())) displayedMonth = YearMonth.now();
+        updateHolidaySelectionUi();
+        refreshMonth();
+    }
+
+    private void cancelHolidaySelection() {
+        if (!holidaySelectionMode) return;
+        holidaySelectionMode = false;
+        pendingHolidayDates.clear();
+        if (monthBeforeHolidaySelection != null) displayedMonth = monthBeforeHolidaySelection;
+        monthBeforeHolidaySelection = null;
+        updateHolidaySelectionUi();
+        refreshMonth();
+    }
+
+    private void saveHolidaySelection() {
+        if (!holidaySelectionMode) return;
+        Set<String> values = new HashSet<>();
+        int futureCount = 0;
+        LocalDate today = LocalDate.now();
+        for (LocalDate date : pendingHolidayDates) {
+            values.add(date.toString());
+            if (date.isAfter(today)) futureCount++;
+        }
+        prefs.edit().putStringSet(HolidayCalendar.CUSTOM_DATES_KEY, values).apply();
+        WorkAlarmManager.forceSync(this);
+
+        holidaySelectionMode = false;
+        if (monthBeforeHolidaySelection != null) displayedMonth = monthBeforeHolidaySelection;
+        monthBeforeHolidaySelection = null;
+        pendingHolidayDates.clear();
+        updateHolidaySelectionUi();
+        refreshAll();
+        if (wagePanel != null) wagePanel.refresh();
+        Toast.makeText(this, "已保存 " + futureCount + " 个未来预定假日", Toast.LENGTH_SHORT).show();
+    }
+
+    private void updateHolidaySelectionUi() {
+        if (holidaySelectButton == null || holidaySelectionActions == null || calendarHint == null) return;
+        holidaySelectButton.setVisibility(holidaySelectionMode ? View.GONE : View.VISIBLE);
+        holidaySelectionActions.setVisibility(holidaySelectionMode ? View.VISIBLE : View.GONE);
+        if (holidaySelectionMode) {
+            int count = 0;
+            LocalDate today = LocalDate.now();
+            for (LocalDate date : pendingHolidayDates) if (date.isAfter(today)) count++;
+            if (holidaySelectionInfo != null) holidaySelectionInfo.setText("已选 " + count + " 天");
+            calendarHint.setText("预定假日多选：直接点未来日期，可切换月份；选完点“保存”。已高亮日期再次点击可取消。");
+        } else {
+            calendarHint.setText("工时统计显示每天工时；工资统计显示每天工资。点击日期可修改当天记录；“预定假日”可直接多选未来日期。");
         }
     }
 
@@ -347,16 +532,38 @@ public class MainActivity extends Activity {
     private void refreshAll() { updateRangeButtons(); refreshMonth(); refreshWeek(); calculateRange(); }
 
     private void refreshMonth() {
-        LocalDate today=LocalDate.now(); YearMonth now=YearMonth.from(today); LocalDate ws=getWorkStartDate(); YearMonth first=ws==null?null:YearMonth.from(ws);
-        if(displayedMonth.isAfter(now))displayedMonth=now; if(first!=null&&displayedMonth.isBefore(first))displayedMonth=first;
-        monthTitle.setText(displayedMonth.getYear()+"年"+displayedMonth.getMonthValue()+"月\n点击选择月份");
-        previousMonthButton.setEnabled(first==null||displayedMonth.isAfter(first)); nextMonthButton.setEnabled(displayedMonth.isBefore(now));
-        LocalDate start=displayedMonth.atDay(1); if(ws!=null&&start.isBefore(ws))start=ws; LocalDate end=displayedMonth.equals(now)?today:displayedMonth.atEndOfMonth();
-        Stats st=collectStats(start,end); totalHoursText.setText(formatDurationHours(st.totalHours));
-        statusStatsText.setText(StatusStatsFormatter.format(st.workDays,st.leaveDays,st.holidayDays,st.restDays));
-        if(wagePanel!=null){ wagePanel.setDisplayedMonth(displayedMonth); totalWageText.setText(String.format(Locale.UK,"£%.2f",wagePanel.getDisplayedMonthWage())); }
+        LocalDate today = LocalDate.now();
+        YearMonth now = YearMonth.from(today);
+        LocalDate ws = getWorkStartDate();
+        YearMonth first = ws == null ? null : YearMonth.from(ws);
+
+        if (holidaySelectionMode) {
+            if (displayedMonth.isBefore(now)) displayedMonth = now;
+            monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n选择预定假日");
+            previousMonthButton.setEnabled(displayedMonth.isAfter(now));
+            nextMonthButton.setEnabled(true);
+        } else {
+            if (displayedMonth.isAfter(now)) displayedMonth = now;
+            if (first != null && displayedMonth.isBefore(first)) displayedMonth = first;
+            monthTitle.setText(displayedMonth.getYear() + "年" + displayedMonth.getMonthValue() + "月\n点击选择月份");
+            previousMonthButton.setEnabled(first == null || displayedMonth.isAfter(first));
+            nextMonthButton.setEnabled(displayedMonth.isBefore(now));
+        }
+
+        LocalDate start = displayedMonth.atDay(1);
+        if (ws != null && start.isBefore(ws)) start = ws;
+        LocalDate end = displayedMonth.equals(now) ? today : displayedMonth.atEndOfMonth();
+
+        Stats st = collectStats(start, end);
+        totalHoursText.setText(formatDurationHours(st.totalHours));
+        statusStatsText.setText(StatusStatsFormatter.format(st.workDays, st.leaveDays, st.holidayDays, st.restDays));
+        if (wagePanel != null) {
+            wagePanel.setDisplayedMonth(displayedMonth);
+            totalWageText.setText(String.format(Locale.UK, "£%.2f", wagePanel.getDisplayedMonthWage()));
+        }
         rebuildSharedCalendar(today);
-        refreshWorkMonthDetails();
+        if (!holidaySelectionMode) refreshWorkMonthDetails();
+        updateHolidaySelectionUi();
     }
 
     private void refreshWeek() {
