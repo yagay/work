@@ -8,8 +8,6 @@ import org.json.JSONObject;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
-import java.util.HashSet;
-import java.util.Set;
 
 public final class HolidayCalendar {
     public static final String REGION_KEY = "holiday_region";
@@ -21,7 +19,6 @@ public final class HolidayCalendar {
     private HolidayCalendar() { }
 
     public static String getHolidayName(SharedPreferences prefs, LocalDate date) {
-        if (isCustomHoliday(prefs, date)) return "预定假期";
         return getPublicHolidayName(prefs, date);
     }
 
@@ -41,24 +38,6 @@ public final class HolidayCalendar {
 
     public static boolean isPublicHoliday(SharedPreferences prefs, LocalDate date) {
         return getPublicHolidayName(prefs, date) != null;
-    }
-
-    public static boolean isCustomHoliday(SharedPreferences prefs, LocalDate date) {
-        if (prefs == null || date == null) return false;
-        Set<String> dates = prefs.getStringSet(CUSTOM_DATES_KEY, null);
-        return dates != null && dates.contains(date.toString());
-    }
-
-    public static Set<LocalDate> getCustomHolidayDates(SharedPreferences prefs) {
-        Set<LocalDate> out = new HashSet<>();
-        if (prefs == null) return out;
-        Set<String> raw = prefs.getStringSet(CUSTOM_DATES_KEY, null);
-        if (raw == null) return out;
-        for (String value : raw) {
-            try { out.add(LocalDate.parse(value)); }
-            catch (Exception ignored) { }
-        }
-        return out;
     }
 
     public static String regionForDate(SharedPreferences prefs, LocalDate date) {
@@ -88,7 +67,7 @@ public final class HolidayCalendar {
     }
 
     public static boolean isHoliday(SharedPreferences prefs, LocalDate date) {
-        return getHolidayName(prefs, date) != null;
+        return isPublicHoliday(prefs, date);
     }
 
     public static String label(String region) {
