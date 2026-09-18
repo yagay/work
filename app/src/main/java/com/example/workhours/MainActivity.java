@@ -288,7 +288,7 @@ public class MainActivity extends Activity {
                 }
             }
             TextView st=text(value,10,leave||holiday||manualRest||override||autoRest||overtime>0); st.setGravity(Gravity.CENTER); st.setSingleLine(false); cell.addView(st);
-            if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：公共假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
+            if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
             calendarGrid.addView(cell,gridParams());
         }
     }
