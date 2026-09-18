@@ -591,10 +591,10 @@ public class MainActivity extends Activity {
             float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured), overtime=(future||before)?0:getOvertimeHours(d), total=normal+overtime;
             LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);cell.setPadding(dp(2),dp(6),dp(2),dp(5));
             if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_TODAY_BG,12,UiStyle.CAL_TODAY_BORDER,1));else if(leave)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_LEAVE_BG,12,UiStyle.CAL_LEAVE_BORDER,1));else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERTIME_BG,12,UiStyle.CAL_OVERTIME_BORDER,1));else if(override)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERRIDE_BG,12,UiStyle.CAL_OVERRIDE_BORDER,1));else if(holiday)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_HOLIDAY_BG,12,UiStyle.CAL_HOLIDAY_BORDER,1));else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_REST_BG,12,UiStyle.CAL_REST_BORDER,1));
-            TextView dt=text(String.valueOf(day),14,d.equals(today));dt.setGravity(Gravity.CENTER);if(future||before)dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);cell.addView(dt);
-            String status=""; if(before)status="未开始";else if(!future){if(holiday)status="公共假日";else if(leave)status="请假";else if(manualRest||autoRest)status=overtime>0?"加班 "+shortHours(overtime):"休息";else if(total>0)status=shortHours(total)+(overtime>0?" 加班":"");}
+            TextView dt=text(String.valueOf(day),14,d.equals(today));dt.setGravity(Gravity.CENTER);if(before)dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);cell.addView(dt);
+            String status=""; if(before)status="未开始";else if(holiday)status=HolidayCalendar.isCustomHoliday(prefs,d)?"假期":"公共假日";else if(leave)status="请假";else if(manualRest)status="休息";else if(!future&&autoRest)status=overtime>0?"加班 "+shortHours(overtime):"休息";else if(!future&&total>0)status=shortHours(total)+(overtime>0?" 加班":"");else if(future&&override)status="已设置";
             TextView st=text(status,10,leave||holiday||manualRest||override||autoRest||overtime>0);st.setGravity(Gravity.CENTER);cell.addView(st);
-            if(!future&&!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：公共假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
+            if(!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
             calendarGrid.addView(cell,gridParams());
         }
     }
