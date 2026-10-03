@@ -17,12 +17,17 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.time.DayOfWeek;
+import java.time.LocalDate;
+
 /**
  * Application extension that keeps custom alarm minute settings inline on the
  * Settings screen instead of showing fixed-choice or input dialogs.
  */
 public class EnhancedWorkHoursApplication extends WorkHoursApplication {
     private static final String PREFS = "work_hours_prefs";
+    private static final String LEAVE_PREFIX = "leave_";
+    private static final String LEAVE_NOTE_PREFIX = "leave_note_";
     private static final int TAG_INLINE_ALARM_MINUTES = 0x7f0a0010;
     private static final long ALARM_RESYNC_DEBOUNCE_MS = 500L;
 
@@ -42,6 +47,7 @@ public class EnhancedWorkHoursApplication extends WorkHoursApplication {
 
     private final SharedPreferences.OnSharedPreferenceChangeListener alarmPreferenceListener =
             (sharedPreferences, key) -> {
+                if (key != null) removeWeekendLeaveIfNeeded(sharedPreferences, key);
                 if (key != null && !affectsAlarmSchedule(key)) return;
                 alarmSyncHandler.removeCallbacks(alarmResync);
                 alarmSyncHandler.postDelayed(alarmResync, ALARM_RESYNC_DEBOUNCE_MS);
@@ -54,7 +60,13 @@ public class EnhancedWorkHoursApplication extends WorkHoursApplication {
         if (alarmObservedPrefs.contains(HolidayCalendar.CUSTOM_DATES_KEY)) {
             alarmObservedPrefs.edit().remove(HolidayCalendar.CUSTOM_DATES_KEY).apply();
         }
+
+        boolean removedWeekendLeave = removeStoredWeekendLeave(alarmObservedPrefs);
         alarmObservedPrefs.registerOnSharedPreferenceChangeListener(alarmPreferenceListener);
+        if (removedWeekendLeave) {
+            alarmSyncHandler.removeCallbacks(alarmResync);
+            alarmSyncHandler.post(alarmResync);
+        }
 
         registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
             @Override public void onActivityResumed(Activity activity) {
@@ -79,6 +91,52 @@ public class EnhancedWorkHoursApplication extends WorkHoursApplication {
             @Override public void onActivitySaveInstanceState(Activity activity, Bundle outState) { }
             @Override public void onActivityDestroyed(Activity activity) { }
         });
+    }
+
+    private static boolean removeStoredWeekendLeave(SharedPreferences prefs) {
+        SharedPreferences.Editor editor = null;
+        for (String key : prefs.getAll().keySet()) {
+            LocalDate date = leaveDateFromKey(key);
+            if (date == null || !isWeekend(date)) continue;
+            if (editor == null) editor = prefs.edit();
+            editor.remove(LEAVE_PREFIX + date);
+            editor.remove(LEAVE_NOTE_PREFIX + date);
+        }
+        if (editor == null) return false;
+        editor.apply();
+        return true;
+    }
+
+    private static void removeWeekendLeaveIfNeeded(SharedPreferences prefs, String changedKey) {
+        LocalDate date = leaveDateFromKey(changedKey);
+        if (date == null || !isWeekend(date)) return;
+
+        String leaveKey = LEAVE_PREFIX + date;
+        String noteKey = LEAVE_NOTE_PREFIX + date;
+        if (!prefs.contains(leaveKey) && !prefs.contains(noteKey)) return;
+        prefs.edit().remove(leaveKey).remove(noteKey).apply();
+    }
+
+    private static LocalDate leaveDateFromKey(String key) {
+        if (key == null) return null;
+        String rawDate;
+        if (key.startsWith(LEAVE_NOTE_PREFIX)) {
+            rawDate = key.substring(LEAVE_NOTE_PREFIX.length());
+        } else if (key.startsWith(LEAVE_PREFIX)) {
+            rawDate = key.substring(LEAVE_PREFIX.length());
+        } else {
+            return null;
+        }
+        try {
+            return LocalDate.parse(rawDate);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static boolean isWeekend(LocalDate date) {
+        DayOfWeek day = date.getDayOfWeek();
+        return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
     }
 
     private static boolean affectsAlarmSchedule(String key) {
