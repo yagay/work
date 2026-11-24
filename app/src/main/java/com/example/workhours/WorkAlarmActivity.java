@@ -22,8 +22,8 @@ public class WorkAlarmActivity extends Activity {
     private int snoozeCount;
 
     @Override protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         AppThemeManager.apply(this);
+        super.onCreate(savedInstanceState);
         setShowWhenLocked(true);
         setTurnScreenOn(true);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);

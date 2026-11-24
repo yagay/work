@@ -32,8 +32,8 @@ public class WageActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         appliedDarkTheme = AppThemeManager.apply(this);
+        super.onCreate(savedInstanceState);
         displayedMonth = YearMonth.now();
         setContentView(buildUi());
         AppThemeManager.applySystemBars(this);

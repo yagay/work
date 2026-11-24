@@ -35,6 +35,7 @@ final class AppThemeManager {
 
     static boolean apply(Activity activity) {
         boolean dark = isDark(activity);
+        activity.setTheme(dark ? R.style.AppTheme_Dark : R.style.AppTheme);
         UiStyle.applyDark(dark);
         return dark;
     }

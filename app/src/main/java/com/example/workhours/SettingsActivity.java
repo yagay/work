@@ -118,8 +118,8 @@ public class SettingsActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         appliedDarkTheme = AppThemeManager.apply(this);
+        super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         setContentView(buildUi());
         AppThemeManager.applySystemBars(this);

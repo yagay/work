@@ -46,6 +46,7 @@ public class MainActivity extends Activity {
     private static final String OVERTIME_END_PREFIX = "overtime_end_";
     private static final String LEAVE_PREFIX = "leave_";
     private static final String LEAVE_NOTE_PREFIX = "leave_note_";
+    private static final String DAY_NOTE_PREFIX = "day_note_";
     private static final String REST_PREFIX = "rest_";
     private static final String WAGE_DEDUCT_PREFIX = "wage_deduct_";
     private static final String START_TIME_KEY = "start_time";
@@ -82,8 +83,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         appliedDarkTheme = AppThemeManager.apply(this);
+        super.onCreate(savedInstanceState);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         LocalDate today = LocalDate.now();
         displayedMonth = YearMonth.now();
@@ -353,7 +354,8 @@ public class MainActivity extends Activity {
                 cell.setBackground(UiStyle.roundRect(this, UiStyle.CAL_REST_BG, 12, UiStyle.CAL_REST_BORDER, 1));
             }
 
-            TextView dt = text(String.valueOf(day), 14, d.equals(today));
+            TextView dt = text(day + (getDayNote(d).isEmpty() ? "" : " ·"), 14, d.equals(today));
+            if (!getDayNote(d).isEmpty()) cell.setContentDescription(d + "，有备注：" + getDayNote(d));
             dt.setGravity(Gravity.CENTER);
             if (before) dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);
             cell.addView(dt);
@@ -395,7 +397,7 @@ public class MainActivity extends Activity {
                 } else {
                     cell.setOnClickListener(v -> {
                         if (holiday) {
-                            Toast.makeText(this, getBankHolidayName(d) + "：公共假日由系统规则管理", Toast.LENGTH_SHORT).show();
+                            showHolidayNoteDialog(d);
                         } else {
                             showEditDayDialog(d);
                         }
@@ -683,10 +685,10 @@ public class MainActivity extends Activity {
             float normal=(future||before)?0:getBaseHoursForDate(d,daily,configured), overtime=(future||before)?0:getOvertimeHours(d), total=normal+overtime;
             LinearLayout cell=vertical();cell.setGravity(Gravity.CENTER);cell.setPadding(dp(2),dp(6),dp(2),dp(5));
             if(d.equals(today))cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_TODAY_BG,12,UiStyle.CAL_TODAY_BORDER,1));else if(leave)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_LEAVE_BG,12,UiStyle.CAL_LEAVE_BORDER,1));else if(overtime>0)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERTIME_BG,12,UiStyle.CAL_OVERTIME_BORDER,1));else if(override)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_OVERRIDE_BG,12,UiStyle.CAL_OVERRIDE_BORDER,1));else if(holiday)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_HOLIDAY_BG,12,UiStyle.CAL_HOLIDAY_BORDER,1));else if(autoRest||manualRest||weekend)cell.setBackground(UiStyle.roundRect(this,UiStyle.CAL_REST_BG,12,UiStyle.CAL_REST_BORDER,1));
-            TextView dt=text(String.valueOf(day),14,d.equals(today));dt.setGravity(Gravity.CENTER);if(before)dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);cell.addView(dt);
+            TextView dt=text(day+(getDayNote(d).isEmpty()?"":" ·"),14,d.equals(today));if(!getDayNote(d).isEmpty())cell.setContentDescription(d+"，有备注："+getDayNote(d));dt.setGravity(Gravity.CENTER);if(before)dt.setTextColor(UiStyle.CAL_DISABLED_TEXT);cell.addView(dt);
             String status=""; if(before)status="未开始";else if(holiday)status="公共假日";else if(leave)status="请假";else if(manualRest)status="休息";else if(!future&&autoRest)status=overtime>0?"加班 "+shortHours(overtime):"休息";else if(!future&&total>0)status=shortHours(total)+(overtime>0?" 加班":"");else if(future&&override)status="已设置";
             TextView st=text(status,10,leave||holiday||manualRest||override||autoRest||overtime>0);st.setGravity(Gravity.CENTER);cell.addView(st);
-            if(!before)cell.setOnClickListener(v->{if(isBankHoliday(d))Toast.makeText(this,getBankHolidayName(d)+"：假日不计正常工时，可在其他工作日设置加班",Toast.LENGTH_SHORT).show();else showEditDayDialog(d);});
+            if(!before)cell.setOnClickListener(v->{if(isBankHoliday(d))showHolidayNoteDialog(d);else showEditDayDialog(d);});
             calendarGrid.addView(cell,gridParams());
         }
     }
@@ -705,9 +707,11 @@ public class MainActivity extends Activity {
             else if(includeAutoRest&&autoRest)line=d.format(f)+" ｜ 休息 ｜ 自动规则";
             else if(includeNormal&&base>0)line=d.format(f)+" ｜ 正常上班 ｜ "+formatDurationHours(base);
             if(ot>0){String otText="加班 "+getOvertimeTimeSummary(d)+" ｜ "+formatDurationHours(ot);line=line==null?d.format(f)+" ｜ "+otText:line+" ｜ "+otText;}
-            if(line!=null){TextView row=text(line,13,holiday||leave||manualRest||override||ot>0);row.setPadding(0,dp(5),0,dp(5));container.addView(row);count++;}
+            String dayNote=getDayNote(d);
+            if(!dayNote.isEmpty()) line=(line==null?d.format(f)+" ｜ "+(autoRest?"休息":formatDurationHours(base+ot)):line)+"\n备注："+dayNote;
+            if(line!=null){TextView row=text(line,13,holiday||leave||manualRest||override||ot>0||!dayNote.isEmpty());row.setPadding(0,dp(5),0,dp(5));container.addView(row);count++;}
         }
-        if(count==0)container.addView(text(includeNormal?"这一周没有可显示的记录。":"本月无公共假日、请假、手动休息、自定义工时或加班记录。",13,false));
+        if(count==0)container.addView(text(includeNormal?"这一周没有可显示的记录。":"本月无公共假日、请假、手动休息、自定义工时、加班或备注记录。",13,false));
     }
 
     private void showEditDayDialog(LocalDate date) {
@@ -720,26 +724,47 @@ public class MainActivity extends Activity {
         ScrollView sc=new ScrollView(this); LinearLayout box=vertical(); box.setPadding(dp(22),dp(8),dp(22),dp(8)); sc.addView(box);
         box.addView(text("当天状态",14,true)); RadioGroup group=new RadioGroup(this); RadioButton normal=new RadioButton(this),leave=new RadioButton(this),rest=new RadioButton(this); normal.setText("正常上班");leave.setText("请假（0 小时）");rest.setText("休息（0 小时）");group.addView(normal);group.addView(leave);group.addView(rest);box.addView(group);
         if(isLeave(date))leave.setChecked(true);else if(isManualRest(date)||(!configured&&!hasOverride))rest.setChecked(true);else normal.setChecked(true);
-        TextView reasonLabel=text("请假原因 / 描述（可选）",14,false);reasonLabel.setPadding(0,dp(8),0,0);box.addView(reasonLabel);EditText reason=new EditText(this);reason.setMinLines(2);reason.setMaxLines(4);reason.setText(getLeaveNote(date));box.addView(reason);
+        TextView reasonLabel=text("请假原因 / 描述（可选）",14,false);reasonLabel.setPadding(0,dp(8),0,0);box.addView(reasonLabel);EditText reason=new EditText(this);reason.setMinLines(2);reason.setMaxLines(4);reason.setText(getLeaveNote(date));box.addView(reason);UiStyle.input(this,reason);reason.setHint("请输入请假原因");
         TextView timeTitle=text("当天上下班时间",14,true);timeTitle.setPadding(0,dp(12),0,dp(6));box.addView(timeTitle);LinearLayout tr=horizontal();Button startButton=button(currentStart),endButton=button(currentEnd);tr.addView(startButton,new LinearLayout.LayoutParams(0,dp(50),1));TextView to=text(" 至 ",14,false);to.setGravity(Gravity.CENTER);tr.addView(to,new LinearLayout.LayoutParams(dp(38),dp(50)));tr.addView(endButton,new LinearLayout.LayoutParams(0,dp(50),1));box.addView(tr);
-        TextView breakLabel=text("当天休息时间（分钟）",14,false);breakLabel.setPadding(0,dp(10),0,0);box.addView(breakLabel);EditText breakInput=new EditText(this);breakInput.setSingleLine(true);breakInput.setInputType(InputType.TYPE_CLASS_NUMBER);breakInput.setText(String.valueOf(currentBreak));box.addView(breakInput);
+        TextView breakLabel=text("当天休息时间（分钟）",14,false);breakLabel.setPadding(0,dp(10),0,0);box.addView(breakLabel);EditText breakInput=new EditText(this);breakInput.setSingleLine(true);breakInput.setInputType(InputType.TYPE_CLASS_NUMBER);breakInput.setText(String.valueOf(currentBreak));UiStyle.input(this,breakInput);box.addView(breakInput);
 
         TextView otTitle=text("加班",14,true);otTitle.setPadding(0,dp(16),0,dp(4));box.addView(otTitle);CheckBox overtimeCheck=new CheckBox(this);overtimeCheck.setText("这一天有加班");overtimeCheck.setChecked(hasOt);box.addView(overtimeCheck);
         LinearLayout otr=horizontal();Button otStartButton=button(currentOtStart),otEndButton=button(currentOtEnd);otr.addView(otStartButton,new LinearLayout.LayoutParams(0,dp(50),1));TextView otTo=text(" 至 ",14,false);otTo.setGravity(Gravity.CENTER);otr.addView(otTo,new LinearLayout.LayoutParams(dp(38),dp(50)));otr.addView(otEndButton,new LinearLayout.LayoutParams(0,dp(50),1));box.addView(otr);
         TextView wageTitle=text("工资",14,true);wageTitle.setPadding(0,dp(16),0,dp(2));box.addView(wageTitle);
         CheckBox wageDeductCheck=new CheckBox(this);wageDeductCheck.setText("这一天需要扣工资");wageDeductCheck.setChecked(prefs.getBoolean(wageDeductKey(date),false));box.addView(wageDeductCheck);
+        TextView noteLabel=text("当天备注（可选）",14,true);noteLabel.setPadding(0,dp(14),0,dp(4));box.addView(noteLabel);
+        EditText dayNoteInput=createDayNoteInput(date);box.addView(dayNoteInput);
         TextView calculated=text("",15,true);calculated.setPadding(0,dp(10),0,0);box.addView(calculated);
         final String[] ss={currentStart},se={currentEnd},os={currentOtStart},oe={currentOtEnd};
         Runnable update=()->{float base=0,ot=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());Float h=calculateHours(ss[0],se[0],b==null?-1:b);if(h!=null)base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h!=null)ot=h;}calculated.setText("正常工时："+formatDurationHours(base)+"\n加班："+formatDurationHours(ot)+"\n合计："+formatDurationHours(base+ot));};
         startButton.setOnClickListener(v->showTimePicker(ss[0],x->{ss[0]=x;startButton.setText(x);update.run();})); endButton.setOnClickListener(v->showTimePicker(se[0],x->{se[0]=x;endButton.setText(x);if(!hasOt&&!overtimeCheck.isChecked()){os[0]=x;oe[0]=x;otStartButton.setText(x);otEndButton.setText(x);}update.run();}));
         otStartButton.setOnClickListener(v->showTimePicker(os[0],x->{os[0]=x;otStartButton.setText(x);update.run();}));otEndButton.setOnClickListener(v->showTimePicker(oe[0],x->{oe[0]=x;otEndButton.setText(x);update.run();}));
-        Runnable controls=()->{boolean n=normal.isChecked(),l=leave.isChecked(),o=overtimeCheck.isChecked();startButton.setEnabled(n);endButton.setEnabled(n);breakInput.setEnabled(n);reason.setEnabled(l);otStartButton.setEnabled(o);otEndButton.setEnabled(o);update.run();};group.setOnCheckedChangeListener((g,id)->controls.run());overtimeCheck.setOnCheckedChangeListener((b,c)->controls.run());controls.run();
+        Runnable controls=()->{boolean n=normal.isChecked(),l=leave.isChecked(),o=overtimeCheck.isChecked();startButton.setEnabled(n);endButton.setEnabled(n);breakInput.setEnabled(n);reasonLabel.setVisibility(l?View.VISIBLE:View.GONE);reason.setVisibility(l?View.VISIBLE:View.GONE);reason.setEnabled(l);otStartButton.setEnabled(o);otEndButton.setEnabled(o);update.run();};group.setOnCheckedChangeListener((g,id)->controls.run());overtimeCheck.setOnCheckedChangeListener((b,c)->controls.run());
+        breakInput.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence t,int start,int count,int after){}public void onTextChanged(CharSequence t,int start,int before,int count){update.run();}public void afterTextChanged(android.text.Editable t){}});controls.run();
 
         DateTimeFormatter tf=DateTimeFormatter.ofPattern("yyyy年M月d日 EEEE",Locale.CHINA); AlertDialog dialog=new AlertDialog.Builder(this).setTitle(date.format(tf)).setView(sc).setPositiveButton("保存",null).setNeutralButton("恢复自动",null).setNegativeButton("取消",null).create();
-        dialog.setOnShowListener(x->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String note=reason.getText().toString().trim();float base=0,ot=0;int br=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());if(b==null||b<0||b>=1440){breakInput.setError("请输入 0～1439 分钟");return;}br=b;Float h=calculateHours(ss[0],se[0],br);if(h==null){Toast.makeText(this,"请检查上下班时间",Toast.LENGTH_SHORT).show();return;}base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h==null||h<=0){Toast.makeText(this,"请设置正确的加班开始和结束时间",Toast.LENGTH_SHORT).show();return;}ot=h;}final float fBase=base,fOt=ot;final int fBr=br;String target=leave.isChecked()?"请假":rest.isChecked()?"休息":"正常上班";String msg="日期："+date.format(tf)+"\n状态："+target+(normal.isChecked()?"\n上班："+ss[0]+"\n下班："+se[0]+"\n休息："+fBr+" 分钟":"")+(overtimeCheck.isChecked()?"\n加班："+os[0]+"–"+oe[0]+"（"+formatDurationHours(fOt)+"）":"")+"\n总工时："+formatDurationHours(fBase+fOt)+(wageDeductCheck.isChecked()?"\n工资：本日扣工资":"");
-            new AlertDialog.Builder(this).setTitle("确认修改？").setMessage(msg).setNegativeButton("取消",null).setPositiveButton("确认修改",(d,w)->{SharedPreferences.Editor e=prefs.edit();if(leave.isChecked()){e.putBoolean(leaveKey(date),true).remove(restKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));if(note.isEmpty())e.remove(leaveNoteKey(date));else e.putString(leaveNoteKey(date),note);}else if(rest.isChecked()){e.putBoolean(restKey(date),true).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));}else{e.remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date));boolean same=configured&&ss[0].equals(defaultStart)&&se[0].equals(defaultEnd)&&fBr==defaultBreak&&Math.abs(fBase-daily)<0.0001f;if(same)e.remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));else e.putFloat(overrideKey(date),fBase).putString(dayStartKey(date),ss[0]).putString(dayEndKey(date),se[0]).putInt(dayBreakKey(date),fBr);}if(overtimeCheck.isChecked())e.putString(overtimeStartKey(date),os[0]).putString(overtimeEndKey(date),oe[0]);else e.remove(overtimeStartKey(date)).remove(overtimeEndKey(date));if(wageDeductCheck.isChecked())e.putBoolean(wageDeductKey(date),true);else e.remove(wageDeductKey(date));e.apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();Toast.makeText(this,"修改已保存",Toast.LENGTH_SHORT).show();}).show();});
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->new AlertDialog.Builder(this).setTitle("确认恢复自动？").setMessage("将清除当天手动状态、上下班时间和加班时间，重新按自动规则计算。").setNegativeButton("取消",null).setPositiveButton("确认恢复",(d,w)->{prefs.edit().remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date)).remove(overtimeStartKey(date)).remove(overtimeEndKey(date)).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date)).remove(wageDeductKey(date)).apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();}).show());});
+        dialog.setOnShowListener(x->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String note=reason.getText().toString().trim();String dayNote=dayNoteInput.getText().toString().trim();float base=0,ot=0;int br=0;if(normal.isChecked()){Integer b=parseBreakMinutes(breakInput.getText().toString());if(b==null||b<0||b>=1440){breakInput.setError("请输入 0～1439 分钟");return;}br=b;Float h=calculateHours(ss[0],se[0],br);if(h==null){Toast.makeText(this,"请检查上下班时间",Toast.LENGTH_SHORT).show();return;}base=h;}if(overtimeCheck.isChecked()){Float h=calculateHours(os[0],oe[0],0);if(h==null||h<=0){Toast.makeText(this,"请设置正确的加班开始和结束时间",Toast.LENGTH_SHORT).show();return;}ot=h;}final float fBase=base,fOt=ot;final int fBr=br;String target=leave.isChecked()?"请假":rest.isChecked()?"休息":"正常上班";String msg="日期："+date.format(tf)+"\n状态："+target+(normal.isChecked()?"\n上班："+ss[0]+"\n下班："+se[0]+"\n休息："+fBr+" 分钟":"")+(overtimeCheck.isChecked()?"\n加班："+os[0]+"–"+oe[0]+"（"+formatDurationHours(fOt)+"）":"")+"\n总工时："+formatDurationHours(fBase+fOt)+(wageDeductCheck.isChecked()?"\n工资：本日扣工资":"")+(dayNote.isEmpty()?"":"\n备注："+dayNote);
+            new AlertDialog.Builder(this).setTitle("确认修改？").setMessage(msg).setNegativeButton("取消",null).setPositiveButton("确认修改",(d,w)->{SharedPreferences.Editor e=prefs.edit();if(leave.isChecked()){e.putBoolean(leaveKey(date),true).remove(restKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));if(note.isEmpty())e.remove(leaveNoteKey(date));else e.putString(leaveNoteKey(date),note);}else if(rest.isChecked()){e.putBoolean(restKey(date),true).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));}else{e.remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date));boolean same=configured&&ss[0].equals(defaultStart)&&se[0].equals(defaultEnd)&&fBr==defaultBreak&&Math.abs(fBase-daily)<0.0001f;if(same)e.remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date));else e.putFloat(overrideKey(date),fBase).putString(dayStartKey(date),ss[0]).putString(dayEndKey(date),se[0]).putInt(dayBreakKey(date),fBr);}if(overtimeCheck.isChecked())e.putString(overtimeStartKey(date),os[0]).putString(overtimeEndKey(date),oe[0]);else e.remove(overtimeStartKey(date)).remove(overtimeEndKey(date));if(wageDeductCheck.isChecked())e.putBoolean(wageDeductKey(date),true);else e.remove(wageDeductKey(date));writeDayNote(e,date,dayNote);e.apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();Toast.makeText(this,"修改已保存",Toast.LENGTH_SHORT).show();}).show();});
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->new AlertDialog.Builder(this).setTitle("确认恢复自动？").setMessage("将清除当天手动状态、上下班时间和加班时间，重新按自动规则计算。已保存的当天备注将保留。").setNegativeButton("取消",null).setPositiveButton("确认恢复",(d,w)->{prefs.edit().remove(overrideKey(date)).remove(dayStartKey(date)).remove(dayEndKey(date)).remove(dayBreakKey(date)).remove(overtimeStartKey(date)).remove(overtimeEndKey(date)).remove(leaveKey(date)).remove(leaveNoteKey(date)).remove(restKey(date)).remove(wageDeductKey(date)).apply();WorkAlarmManager.forceSync(this);dialog.dismiss();refreshAll();}).show());});
         dialog.show();
+    }
+
+    private String getDayNote(LocalDate date) { return prefs.getString(DAY_NOTE_PREFIX+date,""); }
+    private void writeDayNote(SharedPreferences.Editor editor, LocalDate date, String note) {
+        if (note.isEmpty()) editor.remove(DAY_NOTE_PREFIX+date); else editor.putString(DAY_NOTE_PREFIX+date,note);
+    }
+    private EditText createDayNoteInput(LocalDate date) {
+        EditText input=new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        input.setGravity(Gravity.TOP | Gravity.START);input.setMinLines(2);input.setMaxLines(5);
+        UiStyle.input(this,input);input.setHint("例如：迟到、提前下班、特殊安排");input.setText(getDayNote(date));return input;
+    }
+    private void showHolidayNoteDialog(LocalDate date) {
+        LinearLayout box=vertical();box.setPadding(dp(22),dp(8),dp(22),dp(8));
+        box.addView(text(getBankHolidayName(date)+" · 公共假日（工时按系统规则计算）",14,true));
+        EditText input=createDayNoteInput(date);box.addView(input);
+        new AlertDialog.Builder(this).setTitle(date+" 当天备注").setView(box).setNegativeButton("取消",null)
+            .setPositiveButton("保存",(dialog,which)->{SharedPreferences.Editor editor=prefs.edit();writeDayNote(editor,date,input.getText().toString().trim());editor.apply();refreshAll();}).show();
     }
 
     private void chooseWorkWeek(){LocalDate initial=displayedWeekStart,today=LocalDate.now(),ws=getWorkStartDate();DatePickerDialog d=new DatePickerDialog(this,(v,y,m,day)->{LocalDate picked=LocalDate.of(y,m+1,day);displayedWeekStart=mondayOf(picked);refreshWeek();},initial.getYear(),initial.getMonthValue()-1,initial.getDayOfMonth());d.getDatePicker().setMaxDate(System.currentTimeMillis());if(ws!=null)d.getDatePicker().setMinDate(ws.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli());d.show();}
